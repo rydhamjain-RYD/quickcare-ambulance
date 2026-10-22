@@ -14,7 +14,7 @@ type RerouteState = { loading: boolean; options: RouteOption[] | null; blocked: 
 // Signal data and routing in this demo cover Bengaluru only.
 const inBengaluru = (lat: number, lng: number) => lat >= 12.83 && lat <= 13.1 && lng >= 77.45 && lng <= 77.75;
 
-const ROUTE_COLORS = ["#2563eb", "#ea580c"];
+const ROUTE_COLORS = ["#1456f0", "#f06a1a"];
 
 // Demo trip: an example pickup in Jayanagar to Manipal Hospital on Old Airport Road (about 12 km, 18 signals).
 const DEMO_PICKUP: Pickup = { name: "Jayanagar 4th Block (demo pickup)", lat: 12.9265737, lng: 77.5835041 };
@@ -24,13 +24,16 @@ const BANNER_CLASS: Record<AlertStatus, string> = {
   waiting: "gray", alerted: "amber", cleared: "green", heavy: "orange", cannot: "red", unanswered: "violet",
 };
 
-/** What the crew should do, from what the officer at the signal has said. */
+/**
+ * What the crew should do, from what the officer at the signal has said.
+ * With no reply, or no officer posted, the ambulance simply stays on its route. Only a heavy-traffic report changes it.
+ */
 function advice(a: ViewAlert): string {
   if (a.status === "cleared") return "Officer says the route is clear. Proceed.";
   if (a.status === "heavy") return `Heavy traffic${a.reason ? `: ${REASON_LABEL[a.reason].toLowerCase()}` : ""}. Expect a delay and slow down.`;
   if (a.status === "cannot") return "Officer can't clear this signal. Take extra care.";
-  if (!a.onDuty) return a.status === "waiting" ? "No officer is posted here today. Drive with caution." : "No officer is posted here. Drive with caution.";
-  if (a.status === "unanswered") return "No reply from the officer. Drive with caution.";
+  if (!a.onDuty) return "No officer is posted here. Stay on this route and drive with caution.";
+  if (a.status === "unanswered") return "No reply from the officer. Stay on this route and drive with caution.";
   if (a.status === "alerted") return "Officer alerted, waiting for a reply. Keep your siren on.";
   return "The officer will be alerted at 800 m.";
 }
@@ -236,112 +239,118 @@ export default function RoutePlannerPage() {
   const sel = options?.find((o) => o.id === chosen);
   const hospitalLocked = !!hospital && (!!options || !!msg);
   return (
-    <main className="page">
-      <h1>Where to?</h1>
-      <p className="sub">
-        Enter the pickup and the hospital. You get the route and every signal on it.{" "}
-        <button
-          className="btn link"
-          disabled={busy}
-          onClick={() => {
-            setPickup(DEMO_PICKUP);
-            setPPlaces([]);
-            setPMsg(null);
-            setPlaces([]);
-            setSearchMsg(null);
-            findRoutes(DEMO_HOSPITAL, DEMO_PICKUP);
-          }}
-        >
-          Try a demo trip
-        </button>
-      </p>
-      {error && <p className="errbox">{error}</p>}
+    <div className="stage">
+      <div className="stage-map">
+        <Map
+          routes={(options ?? []).map((o, i) => ({ id: o.id, coords: o.coords, color: ROUTE_COLORS[i % 2], selected: o.id === chosen }))}
+          signals={(sel?.signals ?? []).map((s, i) => ({ id: s.id, lat: s.lat, lng: s.lng, label: String(i + 1), color: STATUS.waiting.color }))}
+          hospital={hospital ?? undefined}
+          start={start ?? undefined}
+          height="100%"
+        />
+      </div>
 
-      {pickup ? (
-        <div className="chosen">
-          <span><small>Pickup</small>{pickup.name}</span>
-          <button className="btn" onClick={() => { setPickup(null); setOptions(null); }}>Change</button>
-        </div>
-      ) : (
-        <>
+      <div className="sheet">
+        <h1>Where to?</h1>
+        <p className="sub">
+          Enter the pickup and the hospital to get the route and every signal on it.{" "}
+          <button
+            className="btn link"
+            disabled={busy}
+            onClick={() => {
+              setPickup(DEMO_PICKUP);
+              setPPlaces([]);
+              setPMsg(null);
+              setPlaces([]);
+              setSearchMsg(null);
+              findRoutes(DEMO_HOSPITAL, DEMO_PICKUP);
+            }}
+          >
+            Try a demo trip
+          </button>
+        </p>
+        {error && <p className="errbox">{error}</p>}
+
+        {pickup ? (
+          <div className="chosen">
+            <span><small>Pickup</small>{pickup.name}</span>
+            <button className="btn sm" onClick={() => { setPickup(null); setOptions(null); }}>Change</button>
+          </div>
+        ) : (
+          <>
+            <label className="field">
+              Patient pickup location
+              <div className="row">
+                <input className="grow" value={pQuery} placeholder="Address or landmark" onChange={(e) => setPQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && searchPickup()} />
+                <button className="btn on" onClick={searchPickup} disabled={busy}>Search</button>
+              </div>
+            </label>
+            <button className="btn sm" onClick={useCurrentLocation} disabled={busy}>Use my current location</button>
+            {pMsg && <p className="warn">{pMsg}</p>}
+            {pPlaces.length > 0 && (
+              <ul className="places">
+                {pPlaces.map((p) => (
+                  <li key={p.id}>
+                    <button className="place" onClick={() => choosePickup({ name: p.name, lat: p.lat, lng: p.lng })}>{p.name}</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+
+        {hospitalLocked && hospital ? (
+          <div className="chosen">
+            <span><small>Hospital</small>{hospital.name}</span>
+            <button className="btn sm" onClick={() => { setHospital(null); setOptions(null); setMsg(null); }}>Change</button>
+          </div>
+        ) : (
           <label className="field">
-            Patient pickup location
+            Hospital the family chose
             <div className="row">
-              <input className="grow" value={pQuery} placeholder="Address or landmark, e.g. 5th Block Koramangala" onChange={(e) => setPQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && searchPickup()} />
-              <button className="btn on" onClick={searchPickup} disabled={busy}>Search</button>
-              <button className="btn" onClick={useCurrentLocation} disabled={busy}>Use my current location</button>
+              <input className="grow" value={query} placeholder="e.g. Manipal, Mahaveer, Rangadore" onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && search()} />
+              <button className="btn on" onClick={search} disabled={busy}>Search</button>
             </div>
           </label>
-          {pMsg && <p className="warn">{pMsg}</p>}
-          {pPlaces.length > 0 && (
-            <ul className="places">
-              {pPlaces.map((p) => (
-                <li key={p.id}>
-                  <button className="place" onClick={() => choosePickup({ name: p.name, lat: p.lat, lng: p.lng })}>{p.name}</button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
-
-      {hospitalLocked && hospital ? (
-        <div className="chosen">
-          <span><small>Hospital</small>{hospital.name}</span>
-          <button className="btn" onClick={() => { setHospital(null); setOptions(null); setMsg(null); }}>Change</button>
-        </div>
-      ) : (
-        <label className="field">
-          Hospital the family chose
-          <div className="row">
-            <input className="grow" value={query} placeholder="e.g. Manipal, Mahaveer, Rangadore" onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && search()} />
-            <button className="btn on" onClick={search} disabled={busy}>Search</button>
-          </div>
-        </label>
-      )}
-      {searchMsg && <p className="warn">{searchMsg}</p>}
-      {places.length > 0 && !hospitalLocked && (
-        <ul className="places">
-          {places.map((p) => (
-            <li key={p.id}>
-              <button className={hospital?.id === p.id ? "place on" : "place"} onClick={() => findRoutes(p)} disabled={busy}>
-                {p.name} {p.source === "saved" && <em>saved</em>}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {busy && <p className="muted">Working…</p>}
-      {msg && <p className="warn">{msg}</p>}
-
-      {options && hospital && (
-        <>
-          <h2>Choose a route</h2>
-          <div className="cards">
-            {options.map((o, i) => (
-              <button key={o.id} className={chosen === o.id ? "card on" : "card"} onClick={() => setChosen(o.id)} style={{ borderColor: chosen === o.id ? undefined : ROUTE_COLORS[i % 2] }}>
-                <b>{o.labels.map((l) => (l === "quickest" ? "Quickest" : "Fewest signals")).join(" and ")}</b>
-                <span className="time" style={{ color: "var(--text)" }}>{fmtMin(o.durationS)}</span>
-                <span>{fmtKm(o.distanceM)} · {o.signals.length} traffic signals</span>
-              </button>
+        )}
+        {searchMsg && <p className="warn">{searchMsg}</p>}
+        {places.length > 0 && !hospitalLocked && (
+          <ul className="places">
+            {places.map((p) => (
+              <li key={p.id}>
+                <button className={hospital?.id === p.id ? "place on" : "place"} onClick={() => findRoutes(p)} disabled={busy}>
+                  {p.name} {p.source === "saved" && <em>saved</em>}
+                </button>
+              </li>
             ))}
-          </div>
-          {options.length === 1 && <p className="muted">The quickest route is also the one with the fewest signals.</p>}
-          <p className="muted">Times use normal road speeds, not live traffic.</p>
-          <Map
-            routes={options.map((o, i) => ({ id: o.id, coords: o.coords, color: ROUTE_COLORS[i % 2], selected: o.id === chosen }))}
-            signals={(sel?.signals ?? []).map((s, i) => ({ id: s.id, lat: s.lat, lng: s.lng, label: String(i + 1), color: STATUS.waiting.color }))}
-            hospital={hospital}
-            start={start ?? undefined}
-          />
-          <label className="field">
-            Note about the patient (optional, any language)
-            <textarea rows={2} value={note} placeholder="e.g. bike se gir gaya, sir se khoon, hosh nahi" onChange={(e) => setNote(e.target.value)} />
-          </label>
-          <button className="btn on big" onClick={startTrip} disabled={busy}>Start trip and alert officers</button>
-        </>
-      )}
-    </main>
+          </ul>
+        )}
+        {busy && <p className="muted">Working…</p>}
+        {msg && <p className="warn">{msg}</p>}
+
+        {options && hospital && (
+          <>
+            <h2>Choose a route</h2>
+            <div className="cards">
+              {options.map((o) => (
+                <button key={o.id} className={chosen === o.id ? "card on" : "card"} onClick={() => setChosen(o.id)}>
+                  <b>{o.labels.map((l) => (l === "quickest" ? "Quickest" : "Fewest signals")).join(" and ")}</b>
+                  <span className="time">{fmtMin(o.durationS)}</span>
+                  <span>{fmtKm(o.distanceM)} · {o.signals.length} signals</span>
+                </button>
+              ))}
+            </div>
+            {options.length === 1 && <p className="muted">The quickest route is also the one with the fewest signals.</p>}
+            <p className="muted">Times use normal road speeds, not live traffic.</p>
+            <label className="field">
+              Note about the patient (optional, any language)
+              <textarea rows={2} value={note} placeholder="e.g. bike se gir gaya, sir se khoon, hosh nahi" onChange={(e) => setNote(e.target.value)} />
+            </label>
+            <button className="btn go big block" onClick={startTrip} disabled={busy}>Start trip and alert officers</button>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -358,6 +367,7 @@ function TripScreen({
   takeRoute: (r: RouteOption) => void;
   post: (b: object) => void;
 }) {
+  const [collapsed, setCollapsed] = useState(false);
   const done = trip.status === "arrived";
   const nextAlert = trip.alerts.find((a) => a.alongM > trip.progressM);
 
@@ -370,82 +380,97 @@ function TripScreen({
   const showNotice = !!trip.notice && Date.now() - trip.notice.at < 120_000;
 
   return (
-    <main className="page">
-      <h1>Heading to {trip.hospital.name}</h1>
-      {error && <p className="errbox">{error}</p>}
-
-      <div className="stats">
-        <div className="stat"><b>{done ? "Arrived" : fmtMin(trip.etaS)}</b><span>{done ? "at the hospital" : "to the hospital"}</span></div>
-        <div className="stat"><b>{fmtKm(trip.remainingM)}</b><span>remaining</span></div>
-        <div className="stat"><b>{trip.nextSignal ? `#${trip.nextSignal.index} in ${fmtKm(trip.nextSignal.distanceM)}` : "None"}</b><span>next signal</span></div>
+    <div className="stage">
+      <div className="stage-map">
+        <Map
+          routes={[{ id: trip.route.id, coords: trip.route.coords, color: "#1456f0", selected: true }]}
+          signals={trip.alerts.map((a) => ({ id: a.signalId, lat: a.lat, lng: a.lng, label: String(a.index), color: STATUS[a.status].color }))}
+          ambulance={{ lat: trip.position[1], lng: trip.position[0] }}
+          hospital={trip.hospital}
+          start={trip.start}
+          height="100%"
+        />
       </div>
 
-      <div className="legend" style={{ margin: "4px 0 0" }}>
-        <span>
-          <Lens color={trip.hospitalDesk.online ? "#0e9f6e" : "#64748b"} small />
-          {trip.hospitalDesk.online ? "Hospital emergency desk is online" : "Hospital emergency desk is not logged in"}
-        </span>
-        {trip.hospitalAck && (
+      <div className={`sheet${collapsed ? " collapsed" : ""}`}>
+        <button className="grab" onClick={() => setCollapsed((c) => !c)} aria-label={collapsed ? "Show details" : "Hide details"} />
+        {error && <p className="errbox">{error}</p>}
+        <p className="dest">Heading to {trip.hospital.name}</p>
+
+        <div className="eta">
           <span>
-            <Lens color="#0e9f6e" small />
-            <b>Team ready</b> · confirmed by {trip.hospitalAck.by}
+            <b>{done ? "Arrived" : fmtMin(trip.etaS)}</b>
+            <span>{done ? "at the hospital" : "to the hospital"}</span>
           </span>
-        )}
-      </div>
-
-      {showNotice && trip.notice && (
-        <div className="banner orange" role="status">
-          <Lens color="#fff" />
-          <span><b>Route update.</b> {trip.notice.text}</span>
-        </div>
-      )}
-
-      {nextAlert && (
-        <div className={`banner ${BANNER_CLASS[nextAlert.status]}`} role="status">
-          <Lens color="#fff" pulse={nextAlert.status === "alerted"} />
-          <span>
-            <b>Next signal #{nextAlert.index}, {fmtKm(nextAlert.alongM - trip.progressM)} ahead.</b> {advice(nextAlert)}
-            {nextAlert.answeredBy && <> Reply from {nextAlert.answeredBy.name}.</>}
+          <span className="right">
+            <b>{fmtKm(trip.remainingM)}</b>
+            <span>remaining</span>
           </span>
         </div>
-      )}
 
-      <Map
-        routes={[{ id: trip.route.id, coords: trip.route.coords, color: "#2563eb", selected: true }]}
-        signals={trip.alerts.map((a) => ({ id: a.signalId, lat: a.lat, lng: a.lng, label: String(a.index), color: STATUS[a.status].color }))}
-        ambulance={{ lat: trip.position[1], lng: trip.position[0] }}
-        hospital={trip.hospital}
-        start={trip.start}
-      />
-
-      <div className="row">
-        <button className="btn on" onClick={findAnotherRoute} disabled={done}>Find another route</button>
-        <span className="muted">Demo speed:</span>
-        {[1, 4, 8, 16].map((s) => (
-          <button key={s} className={trip.speed === s ? "btn on" : "btn"} onClick={() => post({ action: "speed", speed: s })}>{s}x</button>
-        ))}
-        <button className="btn danger" onClick={() => post({ action: "reset" })}>End demo</button>
-      </div>
-      {trip.reroutes > 0 && <p className="muted">You have switched route {trip.reroutes} time{trip.reroutes > 1 ? "s" : ""}.</p>}
-
-      <h2>Signals on this route ({trip.alerts.length})</h2>
-      {trip.alerts.length === 0 && <p>No traffic signals found on this route.</p>}
-      <ol className="signals">
-        {trip.alerts.map((a) => (
-          <li key={a.signalId}>
-            <Lens color={STATUS[a.status].color} pulse={a.status === "alerted"}>{a.index}</Lens>
-            <span className="what">
-              <b>{fmtKm(Math.max(0, a.alongM - trip.progressM))} {a.alongM <= trip.progressM ? "(passed)" : "ahead"}, heading {a.direction}</b>
-              <small>
-                {a.onDuty ? <>Officer on duty: {a.onDuty.name} ({a.onDuty.badge})</> : "No officer posted here today"}
-                {a.status === "heavy" && a.reason ? ` · ${REASON_LABEL[a.reason]}` : ""}
-              </small>
+        {nextAlert && (
+          <div className={`banner ${BANNER_CLASS[nextAlert.status]}`} role="status">
+            <Lens color="#fff" />
+            <span>
+              <b>Signal #{nextAlert.index}, {fmtKm(nextAlert.alongM - trip.progressM)} ahead.</b> {advice(nextAlert)}
+              {nextAlert.answeredBy && <> Reply from {nextAlert.answeredBy.name}.</>}
             </span>
-            <span className="state" style={{ color: STATUS[a.status].color }}>{STATUS[a.status].label}</span>
-          </li>
-        ))}
-      </ol>
-      {trip.route.narrowLaneWarning && <p className="warn">This route may use a narrow lane. Use your own judgement.</p>}
+          </div>
+        )}
+
+        {showNotice && trip.notice && (
+          <div className="banner orange" role="status">
+            <Lens color="#fff" />
+            <span><b>Route update.</b> {trip.notice.text}</span>
+          </div>
+        )}
+
+        <div className="pills">
+          <span className="pill">
+            <Lens color={trip.hospitalDesk.online ? "#12a150" : "#64748b"} small />
+            {trip.hospitalDesk.online ? "Hospital desk online" : "Hospital desk not logged in"}
+          </span>
+          {trip.hospitalAck && (
+            <span className="pill" style={{ color: "#0a5c2e" }}>
+              <Lens color="#12a150" small />
+              Team ready · {trip.hospitalAck.by.split(",")[0]}
+            </span>
+          )}
+          {trip.reroutes > 0 && <span className="pill">Rerouted {trip.reroutes}×</span>}
+        </div>
+
+        <div className="row">
+          <button className="btn on sm" onClick={findAnotherRoute} disabled={done}>Find another route</button>
+          <button className="btn danger sm" onClick={() => post({ action: "reset" })}>End trip</button>
+        </div>
+        <div className="row" style={{ marginTop: 0 }}>
+          <span className="muted">Demo speed</span>
+          {[1, 4, 8, 16].map((s) => (
+            <button key={s} className={trip.speed === s ? "btn on sm" : "btn sm"} onClick={() => post({ action: "speed", speed: s })}>{s}x</button>
+          ))}
+        </div>
+
+        <details className="fold" open>
+          <summary>Signals on this route ({trip.alerts.length})</summary>
+          {trip.alerts.length === 0 && <p>No traffic signals found on this route.</p>}
+          <ol className="signals">
+            {trip.alerts.map((a) => (
+              <li key={a.signalId}>
+                <Lens color={STATUS[a.status].color}>{a.index}</Lens>
+                <span className="what">
+                  <b>{fmtKm(Math.max(0, a.alongM - trip.progressM))} {a.alongM <= trip.progressM ? "(passed)" : "ahead"} · heading {a.direction}</b>
+                  <small>
+                    {a.onDuty ? <>Officer: {a.onDuty.name} ({a.onDuty.badge})</> : "No officer posted"}
+                    {a.status === "heavy" && a.reason ? ` · ${REASON_LABEL[a.reason]}` : ""}
+                  </small>
+                </span>
+                <span className="pill" style={{ color: STATUS[a.status].color }}>{STATUS[a.status].label}</span>
+              </li>
+            ))}
+          </ol>
+        </details>
+        {trip.route.narrowLaneWarning && <p className="warn">This route may use a narrow lane. Use your own judgement.</p>}
+      </div>
 
       {(popup || reroute) && (
         <div className="backdrop" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
@@ -497,6 +522,6 @@ function TripScreen({
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }
