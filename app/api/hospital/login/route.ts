@@ -1,4 +1,5 @@
 import { loginHospital } from "@/lib/hospitalStaff";
+import { getTripRaw } from "@/lib/trip";
 
 export async function POST(request: Request) {
   let body: { id?: string; pin?: string };
@@ -11,7 +12,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Enter your hospital ID and PIN." }, { status: 400 });
   }
   try {
-    const r = await loginHospital(body.id, body.pin);
+    const r = await loginHospital(body.id, body.pin, (await getTripRaw())?.hospital ?? null);
     if (!r.ok) return Response.json({ error: r.error }, { status: 401 });
     return Response.json({ token: r.token, account: r.account });
   } catch (e) {

@@ -237,7 +237,7 @@ function Dashboard({ account, call, onSignOut }: { account: Account; call: Call;
               <span>{arrived ? "at your door" : "until the ambulance arrives"}</span>
             </span>
           </div>
-          <p className="muted">An estimate that includes assumed traffic for this time of day, not live traffic. You are told the time only, not where the ambulance is.</p>
+          <p className="muted">An estimate that includes traffic. You are told the time only, not where the ambulance is.</p>
 
           <div className="panel">
             <h2 style={{ marginTop: 0 }}>Note from the crew</h2>

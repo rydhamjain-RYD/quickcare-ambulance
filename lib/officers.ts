@@ -3,6 +3,7 @@ import roster from "@/data/officers.json";
 import signalsData from "@/data/signals.json";
 import { haversine } from "./geo";
 import * as store from "./store";
+import { OPEN_LOGIN } from "./testMode";
 
 /**
  * Officer identity and daily posting.
@@ -46,7 +47,15 @@ export async function login(badge: string, pin: string): Promise<{ ok: true; tok
   const f = (await store.get<{ n: number; until: number }>(failKey))?.value;
   if (f && f.until > Date.now()) return { ok: false, error: "Too many wrong attempts. Try again in a few minutes." };
 
-  const rec = ROSTER.find((r) => r.badge === key);
+  let rec = ROSTER.find((r) => r.badge === key);
+  if (OPEN_LOGIN && key) {
+    // Any badge and PIN is let in. A badge that is not on the roster becomes one of the sample officers, always the same one for the same text.
+    const sum = [...key].reduce((s, c) => s + c.charCodeAt(0), 0);
+    rec = rec ?? ROSTER[sum % ROSTER.length];
+    const token = randomBytes(24).toString("hex");
+    await store.put(`session:officer:${token}`, rec.badge, { ttlSec: SESSION_TTL_S });
+    return { ok: true, token, officer: publicOf(rec) };
+  }
   // Same message for an unknown badge and a wrong PIN, so badge numbers cannot be probed.
   if (!rec || !pinMatches(rec.pin, pin.trim())) {
     const n = (f?.n ?? 0) + 1;

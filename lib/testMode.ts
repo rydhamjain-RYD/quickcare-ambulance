@@ -8,6 +8,13 @@
  */
 export const TEST_MODE = process.env.NEXT_PUBLIC_TEST_MODE === "on";
 
+/**
+ * Open login (server side): any badge/ID and PIN is accepted, so the app can be tried on any site without
+ * knowing the sample accounts. It is ON unless the environment variable OPEN_LOGIN is set to "off".
+ * Turn it off for any real use, because with it on anyone can log in as an officer or a hospital.
+ */
+export const OPEN_LOGIN = process.env.OPEN_LOGIN !== "off";
+
 // Same accounts as data/officers.json and data/hospital-staff.json.
 export const TEST_OFFICERS = [
   { badge: "BLR-TP-1001", pin: "4821", name: "Ravi Kumar" },

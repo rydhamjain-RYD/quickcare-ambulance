@@ -3,7 +3,7 @@ import staff from "@/data/hospital-staff.json";
 import hospitals from "@/data/hospitals.json";
 import { haversine } from "./geo";
 import * as store from "./store";
-import { TEST_MODE } from "./testMode";
+import { OPEN_LOGIN, TEST_MODE } from "./testMode";
 
 /**
  * Hospital staff identity.
@@ -76,8 +76,25 @@ function pinMatches(a: string, b: string) {
   return x.length === y.length && timingSafeEqual(x, y);
 }
 
-export async function loginHospital(id: string, pin: string): Promise<{ ok: true; token: string; account: HospitalAccount } | { ok: false; error: string }> {
+export async function loginHospital(
+  id: string,
+  pin: string,
+  tripHospital?: { lat: number; lng: number } | null,
+): Promise<{ ok: true; token: string; account: HospitalAccount } | { ok: false; error: string }> {
   const key = id.trim().toUpperCase();
+  if (OPEN_LOGIN && key) {
+    // Any ID and PIN is let in. A known ID gets its own hospital; anything else gets the hospital the ambulance is heading to.
+    const recs = await allRecs();
+    const byId = recs.find((r) => r.id === key);
+    const byTrip = tripHospital ? recs.find((r) => { const a = accountOf(r); return !!a && hospitalCovers(a, tripHospital.lat, tripHospital.lng); }) : undefined;
+    const rec = byId ?? byTrip ?? recs[0];
+    const account = accountOf(rec);
+    if (account) {
+      const token = randomBytes(24).toString("hex");
+      await store.put(`session:hospital:${token}`, rec.id, { ttlSec: SESSION_TTL_S });
+      return { ok: true, token, account };
+    }
+  }
   const failKey = `fails:hospital:${key}`;
   const f = (await store.get<{ n: number; until: number }>(failKey))?.value;
   if (f && f.until > Date.now()) return { ok: false, error: "Too many wrong attempts. Try again in a few minutes." };
@@ -139,7 +156,7 @@ export async function hospitalPresence(): Promise<(lat: number, lng: number) => 
  * Does nothing outside test mode, so a real deployment never invents accounts.
  */
 export async function ensureHospitalAccount(h: { name: string; lat: number; lng: number }) {
-  if (!TEST_MODE) return;
+  if (!TEST_MODE && !OPEN_LOGIN) return;
   for (let attempt = 0; attempt < 3; attempt++) {
     const row = await store.get<Rec[]>(AUTO_KEY);
     const auto = row?.value ?? [];

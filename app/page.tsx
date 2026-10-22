@@ -33,17 +33,21 @@ function pretendIso(time: string): string | undefined {
 }
 
 const TRAFFIC_COLOR: Record<TrafficLevel, string> = { light: "#12a150", moderate: "#e59a00", heavy: "#e5383b" };
-const clockIST = (iso?: string) =>
-  iso ? new Date(iso).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit" }) : "now";
-
 function TrafficPill({ route }: { route: RouteOption }) {
   if (!route.trafficLevel) return null;
-  const mins = Math.round((route.trafficDelayS ?? 0) / 60);
   return (
     <span className="pill" style={{ color: TRAFFIC_COLOR[route.trafficLevel] }}>
-      {LEVEL_INFO[route.trafficLevel].label} traffic{mins > 0 ? `, +${mins} min` : ""}
+      {LEVEL_INFO[route.trafficLevel].label} traffic
     </span>
   );
+}
+
+/** Whole minutes with no traffic, and the minutes traffic adds. The two always add up to the total shown. */
+function timeParts(route: RouteOption): { total: number; normal: number; extra: number } | null {
+  if (route.freeFlowS === undefined) return null;
+  const total = Math.round(route.durationS / 60);
+  const normal = Math.min(total, Math.round(route.freeFlowS / 60));
+  return { total, normal, extra: total - normal };
 }
 
 const BANNER_CLASS: Record<AlertStatus, string> = {
@@ -281,20 +285,14 @@ export default function RoutePlannerPage() {
             {options.map((o) => (
               <button key={o.id} className={chosen === o.id ? "card on" : "card"} onClick={() => setChosen(o.id)}>
                 <b>{o.labels.map((l) => (l === "quickest" ? "Quickest" : "Fewest signals")).join(" and ")}</b>
-                <span className="time">{fmtMin(o.durationS)}</span>
+                <span className="time">{fmtMin(o.durationS)} <small>total, with traffic</small></span>
+                {timeParts(o) && <span>{timeParts(o)!.normal} min normal + {timeParts(o)!.extra} min traffic</span>}
                 <span>{fmtKm(o.distanceM)} · {o.signals.length} signals</span>
                 <TrafficPill route={o} />
-                {o.slowAreas && o.slowAreas.length > 0 && <span className="slow">Slow near {o.slowAreas.slice(0, 2).join(" and ")}</span>}
               </button>
             ))}
           </div>
           {options.length === 1 && <p className="muted">The quickest route is also the one with the fewest signals.</p>}
-          {options[0].trafficLevel && (
-            <p className="muted">
-              Traffic is assumed for {clockIST(options[0].trafficAt)}: <b>{LEVEL_INFO[options[0].trafficLevel].label}</b>. It comes from the time
-              of day and known busy spots, not live data.
-            </p>
-          )}
           {TEST_MODE && (
             <label className="field tight" style={{ marginTop: 8 }}>
               Test mode: pretend it is
@@ -366,18 +364,13 @@ function TripScreen({
         <div className="eta">
           <span>
             <b>{done ? "Arrived" : fmtMin(trip.etaS)}</b>
-            <span>{done ? "at the hospital" : "to the hospital"}</span>
+            <span>{done ? "at the hospital" : "to the hospital, with traffic"}</span>
           </span>
           <span className="right">
             <b>{fmtKm(trip.remainingM)}</b>
             <span>remaining</span>
           </span>
         </div>
-        {trip.route.trafficLevel && (
-          <p className="muted" style={{ margin: "6px 2px 0" }}>
-            Includes assumed {LEVEL_INFO[trip.route.trafficLevel].label.toLowerCase()} traffic, about {Math.round((trip.route.trafficDelayS ?? 0) / 60)} min over the whole route. Not live data.
-          </p>
-        )}
 
         {nextAlert && (
           <div className={`banner ${BANNER_CLASS[nextAlert.status]}`} role="status">
@@ -406,6 +399,9 @@ function TripScreen({
               <Lens color="#12a150" small />
               Team ready · {trip.hospitalAck.by.split(",")[0]}
             </span>
+          )}
+          {trip.route.trafficLevel && (
+            <span className="pill" style={{ color: TRAFFIC_COLOR[trip.route.trafficLevel] }}>{LEVEL_INFO[trip.route.trafficLevel].label} traffic</span>
           )}
           {trip.reroutes > 0 && <span className="pill">Rerouted {trip.reroutes}×</span>}
         </div>

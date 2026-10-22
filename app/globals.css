@@ -151,6 +151,7 @@ p { margin: 8px 0; }
 }
 .planpanel .cards { margin-top: 0; }
 .card .slow { font-size: 0.8rem; color: var(--muted); }
+.card .time small { font-size: 0.8rem; font-weight: 600; color: var(--muted); letter-spacing: 0; }
 .card .pill { align-self: flex-start; margin-top: 4px; }
 
 .eta { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: linear-gradient(135deg, #0b1b33 0%, #17407f 100%); color: #fff; border-radius: 18px; padding: 14px 18px; margin: 4px 0 10px; }
