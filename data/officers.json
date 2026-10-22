@@ -2,5 +2,11 @@
   { "badge": "BLR-TP-1001", "pin": "4821", "name": "Ravi Kumar", "rank": "Head Constable", "station": "Jayanagar Traffic Police Station" },
   { "badge": "BLR-TP-1002", "pin": "7305", "name": "Anitha Gowda", "rank": "Police Sub-Inspector", "station": "Koramangala Traffic Police Station" },
   { "badge": "BLR-TP-1003", "pin": "1948", "name": "Suresh Naik", "rank": "Constable", "station": "Indiranagar Traffic Police Station" },
-  { "badge": "BLR-TP-1004", "pin": "6612", "name": "Meena Reddy", "rank": "Head Constable", "station": "Malleshwaram Traffic Police Station" }
+  { "badge": "BLR-TP-1004", "pin": "6612", "name": "Meena Reddy", "rank": "Head Constable", "station": "Malleshwaram Traffic Police Station" },
+  { "badge": "BLR-TP-1005", "pin": "2753", "name": "Imran Sheikh", "rank": "Head Constable", "station": "Banashankari Traffic Police Station" },
+  { "badge": "BLR-TP-1006", "pin": "9036", "name": "Lakshmi Devi", "rank": "Constable", "station": "Whitefield Traffic Police Station" },
+  { "badge": "BLR-TP-1007", "pin": "4417", "name": "Prakash Hegde", "rank": "Police Sub-Inspector", "station": "HSR Layout Traffic Police Station" },
+  { "badge": "BLR-TP-1008", "pin": "5582", "name": "Divya Nair", "rank": "Constable", "station": "Hebbal Traffic Police Station" },
+  { "badge": "BLR-TP-1009", "pin": "8890", "name": "Mohan Raj", "rank": "Head Constable", "station": "Madiwala Traffic Police Station" },
+  { "badge": "BLR-TP-1010", "pin": "3361", "name": "Farah Khan", "rank": "Police Sub-Inspector", "station": "Shivajinagar Traffic Police Station" }
 ]

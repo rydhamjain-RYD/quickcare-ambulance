@@ -20,10 +20,11 @@ type Incoming = {
 type Call = (path: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; data: any }>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 const TOKEN_KEY = "qc_hospital_token";
+// sessionStorage keeps the login per browser tab, like the officer login.
 const store = {
-  get: () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } },
-  set: (t: string) => { try { localStorage.setItem(TOKEN_KEY, t); } catch { /* storage unavailable */ } },
-  clear: () => { try { localStorage.removeItem(TOKEN_KEY); } catch { /* storage unavailable */ } },
+  get: () => { try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; } },
+  set: (t: string) => { try { sessionStorage.setItem(TOKEN_KEY, t); } catch { /* storage unavailable */ } },
+  clear: () => { try { sessionStorage.removeItem(TOKEN_KEY); } catch { /* storage unavailable */ } },
 };
 const SEVERITY_COLOR: Record<string, string> = { critical: "#e5383b", serious: "#f26b1d", stable: "#0e9f6e", unclear: "#64748b" };
 

@@ -1,9 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
+  // The route planner is the home page. Keep old /driver links working.
+  async redirects() {
+    return [{ source: "/driver", destination: "/", permanent: false }];
+  },
 };
 
 export default nextConfig;

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import Map from "./Map";
 import BackLink from "./BackLink";
 import Lens from "./Lens";
+import SearchBox from "./SearchBox";
 import { fmtKm, fmtMin } from "@/lib/useTrip";
 import { HEAVY_REASONS, REASON_LABEL, STATUS, type HeavyReason } from "@/lib/status";
 import type { OfficerAnswer, ViewAlert } from "@/lib/trip";
@@ -14,13 +15,27 @@ type AlertsData = {
   alerts: ViewAlert[];
 };
 type Spot = { lat: number; lng: number; distanceM: number };
-type Place = { id: string; name: string; lat: number; lng: number };
 
 const TOKEN_KEY = "qc_officer_token";
+// Sample accounts shown on the login screen so a demo can be run quickly. Same list as data/officers.json.
+const DEMO_OFFICERS = [
+  { badge: "BLR-TP-1001", pin: "4821", name: "Ravi Kumar" },
+  { badge: "BLR-TP-1002", pin: "7305", name: "Anitha Gowda" },
+  { badge: "BLR-TP-1003", pin: "1948", name: "Suresh Naik" },
+  { badge: "BLR-TP-1004", pin: "6612", name: "Meena Reddy" },
+  { badge: "BLR-TP-1005", pin: "2753", name: "Imran Sheikh" },
+  { badge: "BLR-TP-1006", pin: "9036", name: "Lakshmi Devi" },
+  { badge: "BLR-TP-1007", pin: "4417", name: "Prakash Hegde" },
+  { badge: "BLR-TP-1008", pin: "5582", name: "Divya Nair" },
+  { badge: "BLR-TP-1009", pin: "8890", name: "Mohan Raj" },
+  { badge: "BLR-TP-1010", pin: "3361", name: "Farah Khan" },
+];
+
+// sessionStorage keeps the login per browser tab, so several people can act as different officers in different tabs.
 const store = {
-  get: () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } },
-  set: (t: string) => { try { localStorage.setItem(TOKEN_KEY, t); } catch { /* storage unavailable */ } },
-  clear: () => { try { localStorage.removeItem(TOKEN_KEY); } catch { /* storage unavailable */ } },
+  get: () => { try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; } },
+  set: (t: string) => { try { sessionStorage.setItem(TOKEN_KEY, t); } catch { /* storage unavailable */ } },
+  clear: () => { try { sessionStorage.removeItem(TOKEN_KEY); } catch { /* storage unavailable */ } },
 };
 const initials = (n: string) => n.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
 
@@ -144,8 +159,16 @@ function LoginScreen({ onLogin }: { onLogin: (t: string, o: Officer, p: Posting 
         <button className="btn on big" onClick={submit} disabled={busy} style={{ width: "100%" }}>{busy ? "Checking…" : "Log in"}</button>
       </div>
       <div className="demo-hint">
-        <b>Demo accounts.</b> Badges are checked against a sample roster, not real police records.
-        <br />Try <code>BLR-TP-1001</code> with PIN <code>4821</code>, or <code>BLR-TP-1002</code> with PIN <code>7305</code>.
+        <b>Demo accounts.</b> Badges are checked against a sample roster, not real police records. Each browser tab keeps its own
+        login, so open several tabs and act as different officers at different junctions.
+        <details style={{ marginTop: 8 }}>
+          <summary style={{ cursor: "pointer", fontWeight: 700, color: "var(--ink)" }}>Show the 10 demo officers</summary>
+          <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+            {DEMO_OFFICERS.map((o) => (
+              <li key={o.badge}><code>{o.badge}</code> PIN <code>{o.pin}</code> · {o.name}</li>
+            ))}
+          </ul>
+        </details>
       </div>
     </main>
   );
@@ -156,37 +179,30 @@ function PostingScreen({
 }: {
   officer: Officer; call: Call; canCancel: boolean; onCancel: () => void; onPosted: (p: Posting) => void; onSignOut: () => void;
 }) {
-  const [q, setQ] = useState("");
-  const [places, setPlaces] = useState<Place[]>([]);
   const [area, setArea] = useState<{ name: string; lat: number; lng: number } | null>(null);
   const [spots, setSpots] = useState<Spot[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [demoJunctions, setDemoJunctions] = useState<{ index: number; lat: number; lng: number; alongM: number }[]>([]);
+  const [demoJunctions, setDemoJunctions] = useState<{ index: number; lat: number; lng: number; alongM: number; taken?: string }[]>([]);
 
-  // Demo shortcut: junctions on the ambulance route that is running right now.
+  // Demo shortcut: junctions on the ambulance route that is running right now, and who already holds each one.
   useEffect(() => {
-    fetch("/api/trip", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => setDemoJunctions(d.trip ? d.trip.alerts.map((a: ViewAlert) => ({ index: a.index, lat: a.lat, lng: a.lng, alongM: a.alongM })) : []))
-      .catch(() => setDemoJunctions([]));
+    let alive = true;
+    const load = () =>
+      fetch("/api/trip", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((d) => {
+          if (!alive) return;
+          setDemoJunctions(d.trip ? d.trip.alerts.map((a: ViewAlert) => ({ index: a.index, lat: a.lat, lng: a.lng, alongM: a.alongM, taken: a.onDuty?.name })) : []);
+        })
+        .catch(() => { if (alive) setDemoJunctions([]); });
+    load();
+    const id = setInterval(load, 3000);
+    return () => { alive = false; clearInterval(id); };
   }, []);
 
-  async function searchArea() {
-    setMsg(null); setPlaces([]); setSpots([]); setArea(null);
-    if (q.trim().length < 2) { setMsg("Type the junction or area name, at least 2 letters."); return; }
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/geocode?kind=place&q=${encodeURIComponent(q.trim())}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Search failed");
-      setPlaces(data.results);
-      if (data.results.length === 0) setMsg(`No place found for "${q}". Try the area name, e.g. "Silk Board Junction".`);
-    } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
-  }
-
   async function loadSpots(a: { name: string; lat: number; lng: number }) {
-    setArea(a); setPlaces([]); setMsg(null); setBusy(true);
+    setArea(a); setMsg(null); setSpots([]); setBusy(true);
     const r = await call(`/api/officer/posting?lat=${a.lat}&lng=${a.lng}`);
     setBusy(false);
     if (!r.ok) { setSpots([]); setMsg(r.data.error ?? "Could not find signals here."); return; }
@@ -220,23 +236,12 @@ function PostingScreen({
       <h1>Where are you posted today?</h1>
       <p className="sub">Choose your junction anywhere in Bengaluru. Change it any time your shift moves to another post.</p>
 
-      <label className="field">
+      <div className="field">
         Junction or area
-        <div className="row">
-          <input className="grow" value={q} placeholder="e.g. Silk Board Junction" onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && searchArea()} />
-          <button className="btn on" onClick={searchArea} disabled={busy}>Search</button>
-          <button className="btn" onClick={useGps} disabled={busy}>Use my location</button>
-        </div>
-      </label>
+        <SearchBox kind="place" placeholder="Start typing, e.g. Silk Board Junction" onPick={(p) => loadSpots({ name: p.name.split(",")[0], lat: p.lat, lng: p.lng })} />
+      </div>
+      <button className="btn sm" onClick={useGps} disabled={busy}>Use my location</button>
       {msg && <p className="warn">{msg}</p>}
-
-      {places.length > 0 && (
-        <ul className="places">
-          {places.map((p) => (
-            <li key={p.id}><button className="place" onClick={() => loadSpots({ name: p.name.split(",")[0], lat: p.lat, lng: p.lng })}>{p.name}</button></li>
-          ))}
-        </ul>
-      )}
 
       {area && spots.length > 0 && (
         <>
@@ -260,12 +265,13 @@ function PostingScreen({
 
       {demoJunctions.length > 0 && (
         <div className="demo-hint">
-          <b>Demo shortcut.</b> An ambulance trip is running. Pick one of its junctions to receive its alert.
+          <b>Demo shortcut.</b> An ambulance trip is running. Pick a junction on its route to receive its alert.
+          Junctions that already have an officer are greyed out, so spread out and cover different ones.
           <div className="reasons">
             {demoJunctions.map((j) => (
-              <button key={j.index} className="chip" style={{ borderColor: "var(--accent)", color: "var(--text)" }} disabled={busy}
+              <button key={j.index} className="chip" style={j.taken ? { borderColor: "var(--line)", color: "var(--muted)", background: "var(--bg)" } : { borderColor: "var(--primary)", color: "var(--ink)" }} disabled={busy}
                 onClick={() => post(j.lat, j.lng, `Junction ${j.index} on the demo route`)}>
-                Junction {j.index} ({fmtKm(j.alongM)})
+                Junction {j.index} ({fmtKm(j.alongM)}){j.taken ? ` · ${j.taken.split(" ")[0]}` : ""}
               </button>
             ))}
           </div>

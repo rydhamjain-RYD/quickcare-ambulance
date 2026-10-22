@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Map from "@/components/Map";
 import Lens from "@/components/Lens";
+import SearchBox from "@/components/SearchBox";
 import { fmtKm, fmtMin, useTrip } from "@/lib/useTrip";
 import { REASON_LABEL, STATUS } from "@/lib/status";
 import type { RouteOption } from "@/lib/routing";
@@ -41,12 +42,7 @@ function advice(a: ViewAlert): string {
 export default function RoutePlannerPage() {
   const { trip, loaded, error, setTrip } = useTrip();
   const [pickup, setPickup] = useState<Pickup | null>(null);
-  const [pQuery, setPQuery] = useState("");
-  const [pPlaces, setPPlaces] = useState<Place[]>([]);
   const [pMsg, setPMsg] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [places, setPlaces] = useState<Place[]>([]);
-  const [searchMsg, setSearchMsg] = useState<string | null>(null);
   const [hospital, setHospital] = useState<Place | null>(null);
   const [options, setOptions] = useState<RouteOption[] | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -60,33 +56,10 @@ export default function RoutePlannerPage() {
 
   function choosePickup(p: Pickup) {
     setPickup(p);
-    setPPlaces([]);
     setPMsg(null);
     setOptions(null);
     // If a hospital is already chosen, plan the new route straight away.
     if (hospital) findRoutes(hospital, p);
-  }
-
-  async function searchPickup() {
-    setPMsg(null);
-    setPPlaces([]);
-    if (pQuery.trim().length < 2) {
-      setPMsg("Type the pickup address or a landmark, at least 2 letters.");
-      return;
-    }
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/geocode?kind=place&q=${encodeURIComponent(pQuery.trim())}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Search failed");
-      setPPlaces(data.results);
-      if (data.results.length === 0) setPMsg(`No place found for "${pQuery}". Add the area or a nearby landmark, e.g. "5th Block Koramangala".`);
-      else if (data.searchFailed) setPMsg("Address search is unavailable. Use your current location instead.");
-    } catch (e) {
-      setPMsg((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
   }
 
   function useCurrentLocation() {
@@ -116,35 +89,6 @@ export default function RoutePlannerPage() {
       },
       { enableHighAccuracy: true, timeout: 10000 },
     );
-  }
-
-  async function search() {
-    setMsg(null);
-    setOptions(null);
-    setHospital(null);
-    setPlaces([]);
-    if (query.trim().length < 2) {
-      setSearchMsg("Type at least 2 letters of the hospital name.");
-      return;
-    }
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/geocode?q=${encodeURIComponent(query.trim())}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Search failed");
-      setPlaces(data.results);
-      setSearchMsg(
-        data.results.length === 0
-          ? `No hospital found for "${query}". Check the spelling or try part of the name.`
-          : data.searchFailed
-            ? "Online search is unavailable. Showing saved hospitals only."
-            : null,
-      );
-    } catch (e) {
-      setSearchMsg((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
   }
 
   async function findRoutes(h: Place, from: Pickup | null = start) {
@@ -259,10 +203,7 @@ export default function RoutePlannerPage() {
             disabled={busy}
             onClick={() => {
               setPickup(DEMO_PICKUP);
-              setPPlaces([]);
               setPMsg(null);
-              setPlaces([]);
-              setSearchMsg(null);
               findRoutes(DEMO_HOSPITAL, DEMO_PICKUP);
             }}
           >
@@ -278,24 +219,12 @@ export default function RoutePlannerPage() {
           </div>
         ) : (
           <>
-            <label className="field">
+            <div className="field">
               Patient pickup location
-              <div className="row">
-                <input className="grow" value={pQuery} placeholder="Address or landmark" onChange={(e) => setPQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && searchPickup()} />
-                <button className="btn on" onClick={searchPickup} disabled={busy}>Search</button>
-              </div>
-            </label>
+              <SearchBox kind="place" placeholder="Start typing an address or landmark" onPick={(p) => choosePickup({ name: p.name, lat: p.lat, lng: p.lng })} />
+            </div>
             <button className="btn sm" onClick={useCurrentLocation} disabled={busy}>Use my current location</button>
             {pMsg && <p className="warn">{pMsg}</p>}
-            {pPlaces.length > 0 && (
-              <ul className="places">
-                {pPlaces.map((p) => (
-                  <li key={p.id}>
-                    <button className="place" onClick={() => choosePickup({ name: p.name, lat: p.lat, lng: p.lng })}>{p.name}</button>
-                  </li>
-                ))}
-              </ul>
-            )}
           </>
         )}
 
@@ -305,25 +234,10 @@ export default function RoutePlannerPage() {
             <button className="btn sm" onClick={() => { setHospital(null); setOptions(null); setMsg(null); }}>Change</button>
           </div>
         ) : (
-          <label className="field">
+          <div className="field">
             Hospital the family chose
-            <div className="row">
-              <input className="grow" value={query} placeholder="e.g. Manipal, Mahaveer, Rangadore" onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && search()} />
-              <button className="btn on" onClick={search} disabled={busy}>Search</button>
-            </div>
-          </label>
-        )}
-        {searchMsg && <p className="warn">{searchMsg}</p>}
-        {places.length > 0 && !hospitalLocked && (
-          <ul className="places">
-            {places.map((p) => (
-              <li key={p.id}>
-                <button className={hospital?.id === p.id ? "place on" : "place"} onClick={() => findRoutes(p)} disabled={busy}>
-                  {p.name} {p.source === "saved" && <em>saved</em>}
-                </button>
-              </li>
-            ))}
-          </ul>
+            <SearchBox kind="hospital" placeholder="Start typing, e.g. Manipal, Mahaveer, Rangadore" onPick={(p) => findRoutes(p)} />
+          </div>
         )}
         {busy && <p className="muted">Working…</p>}
         {msg && <p className="warn">{msg}</p>}
