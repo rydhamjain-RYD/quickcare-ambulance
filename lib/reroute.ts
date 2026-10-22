@@ -7,7 +7,7 @@ import { replaceRoute, setNotice, setRerouting, view } from "./trip";
  * afterwards through a notice. If no route avoids the problem, the crew stays on the current route.
  */
 export async function autoReroute(cause: string, officerName: string): Promise<void> {
-  const before = view();
+  const before = await view();
   if (!before || before.status !== "enroute") return;
 
   const avoid = before.alerts
@@ -15,24 +15,24 @@ export async function autoReroute(cause: string, officerName: string): Promise<v
     .map((a) => ({ lat: a.lat, lng: a.lng }));
   if (avoid.length === 0) return;
 
-  setRerouting(true);
+  await setRerouting(true);
   try {
     const result = await planRoutes({ lat: before.position[1], lng: before.position[0] }, before.hospital, { avoid });
     if (result.options.length === 0) {
-      setNotice(`${cause} reported ahead by ${officerName}. No route avoids it, so you stay on the current route. Take extra care.`);
+      await setNotice(`${cause} reported ahead by ${officerName}. No route avoids it, so you stay on the current route. Take extra care.`);
       return;
     }
     const best = result.options.reduce((a, b) => (b.durationS < a.durationS ? b : a));
-    if (!replaceRoute(best)) return;
+    if (!(await replaceRoute(best))) return;
 
     const diffMin = Math.round((best.durationS - before.etaS) / 60);
     const change = diffMin === 0 ? "about the same time" : diffMin > 0 ? `${diffMin} min longer` : `${-diffMin} min shorter`;
-    setNotice(
+    await setNotice(
       `${cause} reported ahead by ${officerName}. You were switched to a new route: ${Math.round(best.durationS / 60)} min, ${best.signals.length} signals (${change}).`,
     );
   } catch {
-    setNotice(`${cause} reported ahead by ${officerName}. Could not find another route automatically. Use "Find another route" or take extra care.`);
+    await setNotice(`${cause} reported ahead by ${officerName}. Could not find another route automatically. Use "Find another route" or take extra care.`);
   } finally {
-    setRerouting(false);
+    await setRerouting(false);
   }
 }

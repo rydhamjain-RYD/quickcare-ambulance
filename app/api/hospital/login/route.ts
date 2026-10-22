@@ -10,7 +10,11 @@ export async function POST(request: Request) {
   if (!body.id?.trim() || !body.pin?.trim()) {
     return Response.json({ error: "Enter your hospital ID and PIN." }, { status: 400 });
   }
-  const r = loginHospital(body.id, body.pin);
-  if (!r.ok) return Response.json({ error: r.error }, { status: 401 });
-  return Response.json({ token: r.token, account: r.account });
+  try {
+    const r = await loginHospital(body.id, body.pin);
+    if (!r.ok) return Response.json({ error: r.error }, { status: 401 });
+    return Response.json({ token: r.token, account: r.account });
+  } catch (e) {
+    return Response.json({ error: (e as Error).message }, { status: 500 });
+  }
 }

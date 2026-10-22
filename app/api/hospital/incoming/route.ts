@@ -9,21 +9,24 @@ import { view } from "@/lib/trip";
  * the ambulance is heading to can see the patient note.
  */
 export async function GET(request: Request) {
-  const account = hospitalFromRequest(request);
-  if (!account) return Response.json({ error: "Please log in again." }, { status: 401 });
-  touchHospital(account.id);
+  try {
+    const account = await hospitalFromRequest(request);
+    if (!account) return Response.json({ error: "Please log in again." }, { status: 401 });
 
-  const t = view();
-  if (!t || !hospitalCovers(account, t.hospital.lat, t.hospital.lng)) return Response.json({ account, trip: null });
+    const [, t] = await Promise.all([touchHospital(account.id), view()]);
+    if (!t || !hospitalCovers(account, t.hospital.lat, t.hospital.lng)) return Response.json({ account, trip: null });
 
-  return Response.json({
-    account,
-    trip: {
-      id: t.id,
-      status: t.status,
-      etaMinutes: Math.max(1, Math.ceil(t.etaS / 60)), // "within N minutes"
-      note: t.note ?? null,
-      hospitalAck: t.hospitalAck ?? null,
-    },
-  });
+    return Response.json({
+      account,
+      trip: {
+        id: t.id,
+        status: t.status,
+        etaMinutes: Math.max(1, Math.ceil(t.etaS / 60)), // "within N minutes"
+        note: t.note ?? null,
+        hospitalAck: t.hospitalAck ?? null,
+      },
+    });
+  } catch (e) {
+    return Response.json({ error: (e as Error).message }, { status: 500 });
+  }
 }
