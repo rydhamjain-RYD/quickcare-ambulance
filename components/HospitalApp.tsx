@@ -20,6 +20,13 @@ type Incoming = {
 type Call = (path: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; data: any }>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 const TOKEN_KEY = "qc_hospital_token";
+// Sample desks, matched to the hospital a demo trip is heading to. Same accounts as data/hospital-staff.json.
+const DEMO_HOSPITALS = [
+  { id: "HOSP-MAN-01", pin: "5190", lat: 12.959846, lng: 77.649214 }, // Manipal Hospital, Old Airport Road
+  { id: "HOSP-RNG-01", pin: "8264", lat: 12.953988, lng: 77.571151 }, // Rangadore Memorial
+  { id: "HOSP-MJH-01", pin: "3377", lat: 12.991652, lng: 77.595149 }, // Bhagwan Mahaveer Jain
+];
+
 // sessionStorage keeps the login per browser tab, like the officer login.
 const store = {
   get: () => { try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; } },
@@ -66,12 +73,35 @@ export default function HospitalApp() {
     [token, signOut],
   );
 
+  // Restore a previous login. With ?demo=1 the page signs in by itself as the demo desk of whichever
+  // hospital the running trip is heading to, so the live demo needs no setup.
   useEffect(() => {
+    const wantDemo = new URLSearchParams(window.location.search).get("demo") === "1";
+
+    const demoJoin = async () => {
+      try {
+        const trip = await (await fetch("/api/trip", { cache: "no-store" })).json();
+        const h = trip.trip?.hospital;
+        if (!h) return; // no demo trip yet: show the normal login
+        const desk = DEMO_HOSPITALS.find((d) => Math.abs(d.lat - h.lat) < 0.004 && Math.abs(d.lng - h.lng) < 0.004);
+        if (!desk) return;
+        const res = await fetch("/api/hospital/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: desk.id, pin: desk.pin }) });
+        const data = await res.json();
+        if (res.ok) { store.set(data.token); setToken(data.token); setAccount(data.account); }
+      } catch { /* fall back to the normal login screen */ }
+    };
+
     const t = store.get();
-    if (!t) { setReady(true); return; }
+    if (!t) {
+      (wantDemo ? demoJoin() : Promise.resolve()).finally(() => setReady(true));
+      return;
+    }
     fetch("/api/hospital/me", { headers: { Authorization: `Bearer ${t}` }, cache: "no-store" })
       .then(async (r) => ({ ok: r.ok, data: await r.json() }))
-      .then(({ ok, data }) => { if (ok) { setToken(t); setAccount(data.account); } else store.clear(); })
+      .then(async ({ ok, data }) => {
+        if (ok) { setToken(t); setAccount(data.account); }
+        else { store.clear(); if (wantDemo) await demoJoin(); }
+      })
       .catch(() => { /* server unreachable: show login */ })
       .finally(() => setReady(true));
   }, []);

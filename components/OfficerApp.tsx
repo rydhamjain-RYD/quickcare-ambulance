@@ -11,7 +11,7 @@ import type { OfficerAnswer, ViewAlert } from "@/lib/trip";
 type Officer = { badge: string; name: string; rank: string; station: string };
 type Posting = { lat: number; lng: number; label: string; since: number; date: string };
 type AlertsData = {
-  trip: { status: string; hospital: string; progressM: number; baseSpeedMps: number } | null;
+  trip: { status: string; hospital: string; progressM: number; baseSpeedMps: number; notice: { text: string; at: number } | null } | null;
   alerts: ViewAlert[];
 };
 type Spot = { lat: number; lng: number; distanceM: number };
@@ -68,15 +68,45 @@ export default function OfficerApp() {
     [token, signOut],
   );
 
-  // Restore a previous login.
+  // Restore a previous login. With ?demo=N the page signs in as demo officer N by itself and takes
+  // a post at junction ?junction=J on the running demo trip, so the live demo needs no setup.
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const demoN = Number(params.get("demo"));
+    const wantDemo = demoN >= 1 && demoN <= DEMO_OFFICERS.length;
+
+    const demoJoin = async () => {
+      try {
+        const o = DEMO_OFFICERS[demoN - 1];
+        const res = await fetch("/api/officer/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ badge: o.badge, pin: o.pin }) });
+        const data = await res.json();
+        if (!res.ok) return;
+        store.set(data.token); setToken(data.token); setOfficer(data.officer); setPosting(data.posting);
+
+        const junction = Number(params.get("junction")) || 3;
+        const trip = await (await fetch("/api/trip", { cache: "no-store" })).json();
+        const a = trip.trip?.alerts?.[junction - 1];
+        if (!a) return; // no demo trip yet: the officer can pick a junction by hand
+        const pr = await fetch("/api/officer/posting", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.token}` },
+          body: JSON.stringify({ lat: a.lat, lng: a.lng, label: `Junction ${junction} on the demo route` }),
+        });
+        const pd = await pr.json();
+        if (pr.ok) setPosting(pd.posting);
+      } catch { /* fall back to the normal login screen */ }
+    };
+
     const t = store.get();
-    if (!t) { setReady(true); return; }
+    if (!t) {
+      (wantDemo ? demoJoin() : Promise.resolve()).finally(() => setReady(true));
+      return;
+    }
     fetch("/api/officer/me", { headers: { Authorization: `Bearer ${t}` }, cache: "no-store" })
       .then(async (r) => ({ ok: r.ok, data: await r.json() }))
-      .then(({ ok, data }) => {
+      .then(async ({ ok, data }) => {
         if (ok) { setToken(t); setOfficer(data.officer); setPosting(data.posting); }
-        else store.clear();
+        else { store.clear(); if (wantDemo) await demoJoin(); }
       })
       .catch(() => { /* server unreachable: show login */ })
       .finally(() => setReady(true));
@@ -355,7 +385,13 @@ function Dashboard({
       {err && <p className="errbox">{err}</p>}
 
       {!trip && <div className="panel"><b>No ambulance is on the way.</b><p className="muted">Keep this page open. An alert appears here when an ambulance is heading through your junction.</p></div>}
-      {trip && alerts.length === 0 && <div className="panel"><b>An ambulance is on the way, but not through your junction.</b></div>}
+      {trip && alerts.length === 0 && trip.notice && trip.notice.text.includes(officer.name) && (
+        <div className="banner green" role="status">
+          <Lens color="#fff" />
+          <span><b>Your report was received.</b> The ambulance was rerouted around your junction, so it will not come through here. Thank you.</span>
+        </div>
+      )}
+      {trip && alerts.length === 0 && !(trip.notice && trip.notice.text.includes(officer.name)) && <div className="panel"><b>An ambulance is on the way, but not through your junction.</b></div>}
 
       {live && trip && (
         <div className="alertbox" style={{ borderColor: STATUS[live.status].color }}>

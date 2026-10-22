@@ -19,6 +19,7 @@ export async function GET(request: Request) {
       hospital: trip.hospital.name,
       progressM: trip.progressM,
       baseSpeedMps: trip.baseSpeedMps,
+      notice: trip.notice ?? null, // lets the officer see that their report led to a reroute
     },
     alerts,
   });

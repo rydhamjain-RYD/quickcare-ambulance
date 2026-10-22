@@ -208,6 +208,19 @@ details.fold[open] summary::after { content: "Hide"; }
 .demo-hint code { background: #fff; border-radius: 6px; padding: 0 7px; color: var(--ink); font-weight: 700; }
 .demo-hint b { color: var(--ink); }
 
+/* ---------- Live demo ---------- */
+.page.wide { max-width: 1280px; }
+.demo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 18px; margin-top: 14px; }
+.demo-col h2 { margin: 0 0 8px; display: flex; align-items: baseline; gap: 8px; }
+.demo-col h2 small { color: var(--muted); font-size: 0.85rem; font-weight: 500; }
+.demo-frame { display: block; width: 100%; height: 760px; border: 0; border-radius: 22px; background: #fff; box-shadow: 0 0 0 1px var(--line), var(--shadow-lg); }
+.demo-empty { height: 760px; border-radius: 22px; background: #fff; display: grid; place-items: center; text-align: center; padding: 24px; color: var(--muted); box-shadow: 0 0 0 1px var(--line); }
+
+/* Inside a Live demo frame: no header or back links, and the map fills the frame. */
+html[data-embed] .topbar, html[data-embed] .back { display: none; }
+html[data-embed] .stage { height: 100dvh; min-height: 0; }
+html[data-embed] .page { padding-top: 14px; }
+
 /* ---------- Map ---------- */
 .map-loading { height: 320px; display: flex; align-items: center; justify-content: center; background: #e8edf5; border-radius: 14px; color: var(--muted); }
 .stage .map-loading { height: 100%; border-radius: 0; }

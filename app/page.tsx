@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import Map from "@/components/Map";
 import Lens from "@/components/Lens";
 import SearchBox from "@/components/SearchBox";
@@ -209,6 +210,8 @@ export default function RoutePlannerPage() {
           >
             Try a demo trip
           </button>
+          {" · "}
+          <Link href="/demo">Live demo on all 3 screens</Link>
         </p>
         {error && <p className="errbox">{error}</p>}
 
