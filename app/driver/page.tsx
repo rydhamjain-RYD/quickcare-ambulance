@@ -5,24 +5,20 @@ import { fmtKm, fmtMin, useTrip } from "@/lib/useTrip";
 import type { RouteOption } from "@/lib/routing";
 import { STATUS } from "@/lib/status";
 
-const STARTS = [
-  { name: "Jayanagar", lat: 12.925, lng: 77.5938 },
-  { name: "Koramangala", lat: 12.9352, lng: 77.6245 },
-  { name: "Indiranagar", lat: 12.9784, lng: 77.6408 },
-  { name: "Malleshwaram", lat: 13.0035, lng: 77.571 },
-  { name: "Hebbal", lat: 13.0358, lng: 77.597 },
-  { name: "Banashankari", lat: 12.9255, lng: 77.5468 },
-  { name: "BTM Layout", lat: 12.9166, lng: 77.6101 },
-  { name: "Rajajinagar", lat: 12.9916, lng: 77.552 },
-];
-
 type Place = { id: string; name: string; lat: number; lng: number; source: string };
+type Pickup = { name: string; lat: number; lng: number };
+
+// Signal data and routing in this demo cover Bengaluru only.
+const inBengaluru = (lat: number, lng: number) => lat >= 12.83 && lat <= 13.1 && lng >= 77.45 && lng <= 77.75;
 
 const ROUTE_COLORS = ["#2563eb", "#ea580c"];
 
 export default function DriverPage() {
   const { trip, loaded, error, setTrip } = useTrip();
-  const [startIdx, setStartIdx] = useState(0);
+  const [pickup, setPickup] = useState<Pickup | null>(null);
+  const [pQuery, setPQuery] = useState("");
+  const [pPlaces, setPPlaces] = useState<Place[]>([]);
+  const [pMsg, setPMsg] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [places, setPlaces] = useState<Place[]>([]);
   const [searchMsg, setSearchMsg] = useState<string | null>(null);
@@ -33,7 +29,65 @@ export default function DriverPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const start = STARTS[startIdx];
+  const start = pickup;
+
+  function choosePickup(p: Pickup) {
+    setPickup(p);
+    setPPlaces([]);
+    setPMsg(null);
+    setOptions(null);
+  }
+
+  async function searchPickup() {
+    setPMsg(null);
+    setPPlaces([]);
+    if (pQuery.trim().length < 2) {
+      setPMsg("Type the pickup address or a landmark, at least 2 letters.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/geocode?kind=place&q=${encodeURIComponent(pQuery.trim())}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Search failed");
+      setPPlaces(data.results);
+      if (data.results.length === 0) setPMsg(`No place found for "${pQuery}". Add the area or a nearby landmark, e.g. "5th Block Koramangala".`);
+      else if (data.searchFailed) setPMsg("Address search is unavailable. Use your current location instead.");
+    } catch (e) {
+      setPMsg((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function useCurrentLocation() {
+    setPMsg(null);
+    if (!navigator.geolocation) {
+      setPMsg("This browser cannot share your location. Type the pickup address instead.");
+      return;
+    }
+    setBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setBusy(false);
+        const { latitude: lat, longitude: lng } = pos.coords;
+        if (!inBengaluru(lat, lng)) {
+          setPMsg("Your location is outside Bengaluru, where this demo has signal data. Type a Bengaluru address instead.");
+          return;
+        }
+        choosePickup({ name: "My current location", lat, lng });
+      },
+      (err) => {
+        setBusy(false);
+        setPMsg(
+          err.code === err.PERMISSION_DENIED
+            ? "Location permission was denied. Allow it in the browser, or type the pickup address."
+            : "Could not get your location. Type the pickup address instead.",
+        );
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }
 
   async function search() {
     setMsg(null);
@@ -68,6 +122,10 @@ export default function DriverPage() {
     setHospital(h);
     setMsg(null);
     setOptions(null);
+    if (!start) {
+      setMsg("Set the pickup location first, above.");
+      return;
+    }
     setBusy(true);
     try {
       const res = await fetch("/api/routes", {
@@ -88,7 +146,7 @@ export default function DriverPage() {
 
   async function startTrip() {
     const route = options?.find((o) => o.id === chosen);
-    if (!route || !hospital) return;
+    if (!route || !hospital || !start) return;
     setBusy(true);
     setMsg(null);
     try {
@@ -170,11 +228,24 @@ export default function DriverPage() {
       <h1>Driver: plan the route</h1>
       {error && <p className="warn">{error}</p>}
       <label className="field">
-        Patient pickup area
-        <select value={startIdx} onChange={(e) => { setStartIdx(Number(e.target.value)); setOptions(null); }}>
-          {STARTS.map((s, i) => <option key={s.name} value={i}>{s.name}</option>)}
-        </select>
+        Patient pickup location
+        <div className="row">
+          <input value={pQuery} placeholder="Address or landmark, e.g. 5th Block Koramangala" onChange={(e) => setPQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && searchPickup()} />
+          <button className="btn on" onClick={searchPickup} disabled={busy}>Search</button>
+          <button className="btn" onClick={useCurrentLocation} disabled={busy}>Use my current location</button>
+        </div>
       </label>
+      {pMsg && <p className="warn">{pMsg}</p>}
+      {pPlaces.length > 0 && (
+        <ul className="places">
+          {pPlaces.map((p) => (
+            <li key={p.id}>
+              <button className="place" onClick={() => choosePickup({ name: p.name, lat: p.lat, lng: p.lng })}>{p.name}</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {pickup && <p className="pickup">Pickup: <b>{pickup.name}</b></p>}
       <label className="field">
         Hospital the family chose
         <div className="row">
@@ -215,7 +286,7 @@ export default function DriverPage() {
             routes={options.map((o, i) => ({ id: o.id, coords: o.coords, color: ROUTE_COLORS[i % 2], selected: o.id === chosen }))}
             signals={(sel?.signals ?? []).map((s, i) => ({ id: s.id, lat: s.lat, lng: s.lng, label: String(i + 1), color: STATUS.waiting.color }))}
             hospital={hospital}
-            start={start}
+            start={start ?? undefined}
           />
           <label className="field">
             Optional note about the patient (any language)

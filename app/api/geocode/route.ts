@@ -6,11 +6,14 @@ type Place = { id: string; name: string; lat: number; lng: number; source: "save
 export async function GET(request: NextRequest) {
   const q = (request.nextUrl.searchParams.get("q") ?? "").trim();
   if (q.length < 2) {
-    return Response.json({ error: "Type at least 2 letters of the hospital name." }, { status: 400 });
+    return Response.json({ error: "Type at least 2 letters." }, { status: 400 });
   }
   const needle = q.toLowerCase();
+  const isPlace = request.nextUrl.searchParams.get("kind") === "place"; // pickup address, not a hospital
 
-  const saved: Place[] = hospitals
+  const saved: Place[] = isPlace
+    ? []
+    : hospitals
     .filter((h) => h.name.toLowerCase().includes(needle) || h.aliases.some((a) => a.includes(needle) || needle.includes(a)))
     .map((h) => ({ id: h.id, name: h.name, lat: h.lat, lng: h.lng, source: "saved" as const }));
 
@@ -20,7 +23,7 @@ export async function GET(request: NextRequest) {
     // Bounded to Bengaluru so "Manipal" does not resolve to Manipal town.
     const url =
       "https://nominatim.openstreetmap.org/search?format=json&limit=5&bounded=1&viewbox=77.45,13.10,77.75,12.83&q=" +
-      encodeURIComponent(q.toLowerCase().includes("hospital") ? q : `${q} hospital`);
+      encodeURIComponent(isPlace || q.toLowerCase().includes("hospital") ? q : `${q} hospital`);
     const res = await fetch(url, {
       headers: { "User-Agent": "QuickCareHackathon/0.1 (student project)" },
       signal: AbortSignal.timeout(8000),

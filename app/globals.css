@@ -34,6 +34,7 @@ h2 { font-size: 1.1rem; margin: 18px 0 8px; }
 .btn.big { padding: 14px 22px; font-size: 1.1rem; font-weight: 600; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+.pickup { background: #eff6ff; border: 1px solid var(--blue); border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
 .places { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
 .place { width: 100%; text-align: left; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 8px; font: inherit; cursor: pointer; }
 .place.on { border-color: var(--blue); background: #eff6ff; }
