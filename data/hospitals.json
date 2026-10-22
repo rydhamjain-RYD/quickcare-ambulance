@@ -1,0 +1,9 @@
+[
+  { "id": "manipal-old-airport", "name": "Manipal Hospital, Old Airport Road", "aliases": ["manipal", "manipal hospital", "manipal old airport road"], "lat": 12.959846, "lng": 77.649214 },
+  { "id": "manipal-jayanagar", "name": "Malathi Manipal Hospital, Jayanagar", "aliases": ["malathi manipal", "manipal jayanagar"], "lat": 12.917153, "lng": 77.591904 },
+  { "id": "mahaveer-jain", "name": "Bhagwan Mahaveer Jain Hospital, Vasanth Nagar", "aliases": ["mahaveer", "mahavir", "mahaveer jain", "mahaveer hospital"], "lat": 12.991652, "lng": 77.595149 },
+  { "id": "rangadore", "name": "Rangadore Memorial Hospital, Basavanagudi", "aliases": ["rangadore", "rangadore memorial", "rangadore hospital"], "lat": 12.953988, "lng": 77.571151 },
+  { "id": "st-johns", "name": "St. John's Medical College Hospital, Koramangala", "aliases": ["st johns", "saint johns", "st john's"], "lat": 12.929678, "lng": 77.618358 },
+  { "id": "victoria", "name": "Victoria Hospital, K.R. Market", "aliases": ["victoria", "victoria hospital"], "lat": 12.963503, "lng": 77.573711 },
+  { "id": "nimhans", "name": "NIMHANS", "aliases": ["nimhans"], "lat": 12.937489, "lng": 77.594142 }
+]
