@@ -17,7 +17,9 @@ export async function autoReroute(cause: string, officerName: string): Promise<v
 
   await setRerouting(true);
   try {
-    const result = await planRoutes({ lat: before.position[1], lng: before.position[0] }, before.hospital, { avoid });
+    // Keep the same assumed time as the trip, so the new route is compared like for like.
+    const at = before.route.trafficAt ? new Date(before.route.trafficAt) : undefined;
+    const result = await planRoutes({ lat: before.position[1], lng: before.position[0] }, before.hospital, { avoid, at });
     if (result.options.length === 0) {
       await setNotice(`${cause} reported ahead by ${officerName}. No route avoids it, so you stay on the current route. Take extra care.`);
       return;

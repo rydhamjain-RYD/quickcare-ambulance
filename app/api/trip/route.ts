@@ -62,7 +62,9 @@ export async function POST(request: Request) {
         .filter((a) => (a.status === "heavy" || a.status === "cannot") && a.alongM > trip.progressM)
         .map((a) => ({ lat: a.lat, lng: a.lng }));
       try {
-        const result = await planRoutes({ lat: trip.position[1], lng: trip.position[0] }, trip.hospital, { avoid });
+        // Keep the same assumed time as the trip, so a reroute is compared like for like.
+        const at = trip.route.trafficAt ? new Date(trip.route.trafficAt) : undefined;
+        const result = await planRoutes({ lat: trip.position[1], lng: trip.position[0] }, trip.hospital, { avoid, at });
         return Response.json({ options: result.options, blocked: !!result.blocked, avoided: avoid.length });
       } catch (e) {
         return Response.json({ error: (e as Error).message }, { status: e instanceof RoutingError ? 502 : 500 });

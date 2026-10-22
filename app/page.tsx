@@ -8,6 +8,7 @@ import { REASON_LABEL, STATUS } from "@/lib/status";
 import type { RouteOption } from "@/lib/routing";
 import type { AlertStatus, TripView, ViewAlert } from "@/lib/trip";
 import { TEST_MODE, TEST_TRIP } from "@/lib/testMode";
+import { LEVEL_INFO, type TrafficLevel } from "@/lib/traffic";
 
 type Place = { id: string; name: string; lat: number; lng: number; source: string };
 type Pickup = { name: string; lat: number; lng: number };
@@ -17,6 +18,33 @@ type RerouteState = { loading: boolean; options: RouteOption[] | null; blocked: 
 const inBengaluru = (lat: number, lng: number) => lat >= 12.83 && lat <= 13.1 && lng >= 77.45 && lng <= 77.75;
 
 const ROUTE_COLORS = ["#1456f0", "#f06a1a"];
+
+// Test mode only: plan as if it were another time of day, to see how assumed traffic changes the routes.
+const PRETEND_TIMES = [
+  { v: "", label: "Now" },
+  { v: "09:00", label: "9:00 am (moderate traffic)" },
+  { v: "13:00", label: "1:00 pm (heavy traffic)" },
+  { v: "23:00", label: "11:00 pm (light traffic)" },
+];
+function pretendIso(time: string): string | undefined {
+  if (!time) return undefined;
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date()); // YYYY-MM-DD in India
+  return new Date(`${today}T${time}:00+05:30`).toISOString();
+}
+
+const TRAFFIC_COLOR: Record<TrafficLevel, string> = { light: "#12a150", moderate: "#e59a00", heavy: "#e5383b" };
+const clockIST = (iso?: string) =>
+  iso ? new Date(iso).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit" }) : "now";
+
+function TrafficPill({ route }: { route: RouteOption }) {
+  if (!route.trafficLevel) return null;
+  const mins = Math.round((route.trafficDelayS ?? 0) / 60);
+  return (
+    <span className="pill" style={{ color: TRAFFIC_COLOR[route.trafficLevel] }}>
+      {LEVEL_INFO[route.trafficLevel].label} traffic{mins > 0 ? `, +${mins} min` : ""}
+    </span>
+  );
+}
 
 const BANNER_CLASS: Record<AlertStatus, string> = {
   waiting: "gray", alerted: "amber", cleared: "green", heavy: "orange", cannot: "red", unanswered: "violet",
@@ -48,6 +76,7 @@ export default function RoutePlannerPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [reroute, setReroute] = useState<RerouteState | null>(null);
+  const [pretend, setPretend] = useState(""); // test mode only: plan as if it were another time of day
 
   const start = pickup;
 
@@ -97,7 +126,7 @@ export default function RoutePlannerPage() {
     );
   }
 
-  async function findRoutes(h: Place, from: Pickup | null = start) {
+  async function findRoutes(h: Place, from: Pickup | null = start, pretendTime: string = pretend) {
     setHospital(h);
     setMsg(null);
     setOptions(null);
@@ -110,7 +139,7 @@ export default function RoutePlannerPage() {
       const res = await fetch("/api/routes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from: { lat: from.lat, lng: from.lng }, to: { lat: h.lat, lng: h.lng } }),
+        body: JSON.stringify({ from: { lat: from.lat, lng: from.lng }, to: { lat: h.lat, lng: h.lng }, at: pretendIso(pretendTime) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Routing failed");
@@ -197,68 +226,96 @@ export default function RoutePlannerPage() {
           hospital={hospital ?? undefined}
           start={start ?? undefined}
           height="100%"
+          inset={{ top: 0.26, bottom: options ? 0.46 : 0.08 }}
         />
       </div>
 
-      <div className="sheet">
-        <h1>Where to?</h1>
-        <p className="sub">
-          Enter the pickup and the hospital to get the route and every signal on it.
-        </p>
+      {/* Pickup and hospital sit in a bar across the top of the screen, over the map. */}
+      <div className="planbar">
         {error && <p className="errbox">{error}</p>}
-
-        {pickup ? (
-          <div className="chosen">
-            <span><small>Pickup</small>{pickup.name}</span>
-            <button className="btn sm" onClick={() => { setPickup(null); setOptions(null); }}>Change</button>
+        <div className="planrow">
+          <div className="planfield">
+            <span className="pin start" aria-hidden />
+            {pickup ? (
+              <div className="chosen compact">
+                <span><small>Pickup</small>{pickup.name}</span>
+                <button className="btn sm" onClick={() => { setPickup(null); setOptions(null); }}>Change</button>
+              </div>
+            ) : (
+              <div className="planinput">
+                <label className="plabel">Pickup</label>
+                <div className="field tight">
+                  <SearchBox kind="place" placeholder="Patient's address or landmark" onPick={(p) => choosePickup({ name: p.name, lat: p.lat, lng: p.lng })} />
+                </div>
+                <button className="btn link" onClick={useCurrentLocation} disabled={busy}>Use my current location</button>
+                {pMsg && <p className="warn">{pMsg}</p>}
+              </div>
+            )}
           </div>
-        ) : (
-          <>
-            <div className="field">
-              Patient pickup location
-              <SearchBox kind="place" placeholder="Start typing an address or landmark" onPick={(p) => choosePickup({ name: p.name, lat: p.lat, lng: p.lng })} />
-            </div>
-            <button className="btn sm" onClick={useCurrentLocation} disabled={busy}>Use my current location</button>
-            {pMsg && <p className="warn">{pMsg}</p>}
-          </>
-        )}
 
-        {hospitalLocked && hospital ? (
-          <div className="chosen">
-            <span><small>Hospital</small>{hospital.name}</span>
-            <button className="btn sm" onClick={() => { setHospital(null); setOptions(null); setMsg(null); }}>Change</button>
+          <div className="planfield">
+            <span className="pin end" aria-hidden>H</span>
+            {hospitalLocked && hospital ? (
+              <div className="chosen compact">
+                <span><small>Hospital</small>{hospital.name}</span>
+                <button className="btn sm" onClick={() => { setHospital(null); setOptions(null); setMsg(null); }}>Change</button>
+              </div>
+            ) : (
+              <div className="planinput">
+                <label className="plabel">Hospital the family chose</label>
+                <div className="field tight">
+                  <SearchBox kind="hospital" placeholder="e.g. Manipal, Mahaveer, Rangadore" onPick={(p) => findRoutes(p)} />
+                </div>
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="field">
-            Hospital the family chose
-            <SearchBox kind="hospital" placeholder="Start typing, e.g. Manipal, Mahaveer, Rangadore" onPick={(p) => findRoutes(p)} />
-          </div>
-        )}
-        {busy && <p className="muted">Working…</p>}
-        {msg && <p className="warn">{msg}</p>}
-
-        {options && hospital && (
-          <>
-            <h2>Choose a route</h2>
-            <div className="cards">
-              {options.map((o) => (
-                <button key={o.id} className={chosen === o.id ? "card on" : "card"} onClick={() => setChosen(o.id)}>
-                  <b>{o.labels.map((l) => (l === "quickest" ? "Quickest" : "Fewest signals")).join(" and ")}</b>
-                  <span className="time">{fmtMin(o.durationS)}</span>
-                  <span>{fmtKm(o.distanceM)} · {o.signals.length} signals</span>
-                </button>
-              ))}
-            </div>
-            {options.length === 1 && <p className="muted">The quickest route is also the one with the fewest signals.</p>}
-            <p className="muted">Times use normal road speeds, not live traffic.</p>
-            <label className="field">
-              Note about the patient (optional, any language)
-              <textarea rows={2} value={note} placeholder="e.g. bike se gir gaya, sir se khoon, hosh nahi" onChange={(e) => setNote(e.target.value)} />
-            </label>
-            <button className="btn go big block" onClick={startTrip} disabled={busy}>Start trip and alert officers</button>
-          </>
-        )}
+        </div>
+        {busy && <p className="muted" style={{ margin: "8px 2px 0" }}>Working…</p>}
+        {msg && <p className="warn" style={{ margin: "8px 0 0" }}>{msg}</p>}
       </div>
+
+      {/* Route choices, traffic and the start button sit in a panel at the bottom. */}
+      {options && hospital && (
+        <div className="planpanel">
+          <div className="cards">
+            {options.map((o) => (
+              <button key={o.id} className={chosen === o.id ? "card on" : "card"} onClick={() => setChosen(o.id)}>
+                <b>{o.labels.map((l) => (l === "quickest" ? "Quickest" : "Fewest signals")).join(" and ")}</b>
+                <span className="time">{fmtMin(o.durationS)}</span>
+                <span>{fmtKm(o.distanceM)} · {o.signals.length} signals</span>
+                <TrafficPill route={o} />
+                {o.slowAreas && o.slowAreas.length > 0 && <span className="slow">Slow near {o.slowAreas.slice(0, 2).join(" and ")}</span>}
+              </button>
+            ))}
+          </div>
+          {options.length === 1 && <p className="muted">The quickest route is also the one with the fewest signals.</p>}
+          {options[0].trafficLevel && (
+            <p className="muted">
+              Traffic is assumed for {clockIST(options[0].trafficAt)}: <b>{LEVEL_INFO[options[0].trafficLevel].label}</b>. It comes from the time
+              of day and known busy spots, not live data.
+            </p>
+          )}
+          {TEST_MODE && (
+            <label className="field tight" style={{ marginTop: 8 }}>
+              Test mode: pretend it is
+              <select
+                value={pretend}
+                onChange={(e) => {
+                  setPretend(e.target.value);
+                  if (hospital) findRoutes(hospital, start, e.target.value);
+                }}
+              >
+                {PRETEND_TIMES.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}
+              </select>
+            </label>
+          )}
+          <label className="field tight" style={{ marginTop: 10 }}>
+            Note about the patient (optional, any language)
+            <textarea rows={2} value={note} placeholder="e.g. bike se gir gaya, sir se khoon, hosh nahi" onChange={(e) => setNote(e.target.value)} />
+          </label>
+          <button className="btn go big block" style={{ marginTop: 12 }} onClick={startTrip} disabled={busy}>Start trip and alert officers</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -316,6 +373,11 @@ function TripScreen({
             <span>remaining</span>
           </span>
         </div>
+        {trip.route.trafficLevel && (
+          <p className="muted" style={{ margin: "6px 2px 0" }}>
+            Includes assumed {LEVEL_INFO[trip.route.trafficLevel].label.toLowerCase()} traffic, about {Math.round((trip.route.trafficDelayS ?? 0) / 60)} min over the whole route. Not live data.
+          </p>
+        )}
 
         {nextAlert && (
           <div className={`banner ${BANNER_CLASS[nextAlert.status]}`} role="status">

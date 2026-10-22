@@ -1,6 +1,7 @@
 import signalsData from "@/data/signals.json";
 import avoidData from "@/data/avoid-polygons.json";
 import { cumulative, haversine, locateOnRoute, pointInPolygon, type LngLat } from "./geo";
+import { estimateTraffic, type TrafficLevel } from "./traffic";
 
 export type Signal = { id: string; lat: number; lng: number; name?: string | null; alongM: number };
 
@@ -13,6 +14,15 @@ export type RouteOption = {
   signals: Signal[];
   /** Set when the route enters a known narrow lane and no cleaner alternative exists. */
   narrowLaneWarning: boolean;
+  /**
+   * Assumed traffic (see lib/traffic.ts). durationS already includes it. These are optional because
+   * a trip saved before this existed does not have them.
+   */
+  trafficLevel?: TrafficLevel;
+  freeFlowS?: number; // the time with no traffic
+  trafficDelayS?: number; // how much of durationS is assumed traffic
+  slowAreas?: string[]; // congested places the route passes
+  trafficAt?: string; // the moment the traffic was assumed for (ISO)
 };
 
 export type RoutesResult = {
@@ -89,7 +99,7 @@ async function osrmRoutes(points: { lat: number; lng: number }[], alternatives: 
 export async function planRoutes(
   from: { lat: number; lng: number },
   to: { lat: number; lng: number },
-  opts: { avoid?: { lat: number; lng: number }[] } = {},
+  opts: { avoid?: { lat: number; lng: number }[]; at?: Date } = {},
 ): Promise<RoutesResult> {
   if (haversine([from.lng, from.lat], [to.lng, to.lat]) < 100) {
     throw new RoutingError("Start and hospital are less than 100 m apart.");
@@ -134,7 +144,14 @@ export async function planRoutes(
   const pool = clean.length > 0 ? clean : candidates;
   const warn = clean.length === 0 && candidates.some((c) => c.narrow);
 
-  const withSignals = pool.map((c) => ({ ...c, signals: signalsAlong(c.coords) }));
+  // Add the assumed traffic for this time of day. This changes every route's time, and so can change
+  // which route is the quickest.
+  const at = opts.at ?? new Date();
+  const withSignals = pool.map((c) => {
+    const signals = signalsAlong(c.coords);
+    const traffic = estimateTraffic(c.coords, c.durationS, signals.length, at);
+    return { ...c, signals, traffic, durationS: traffic.durationS };
+  });
   const quickest = withSignals.reduce((a, b) => (b.durationS < a.durationS ? b : a));
   const fewest = withSignals.reduce((a, b) =>
     b.signals.length < a.signals.length || (b.signals.length === a.signals.length && b.durationS < a.durationS) ? b : a,
@@ -148,6 +165,11 @@ export async function planRoutes(
     coords: c.coords,
     signals: c.signals,
     narrowLaneWarning: warn,
+    trafficLevel: c.traffic.level,
+    freeFlowS: c.traffic.freeFlowS,
+    trafficDelayS: c.traffic.delayS,
+    slowAreas: c.traffic.slowAreas,
+    trafficAt: c.traffic.at,
   });
 
   const options =

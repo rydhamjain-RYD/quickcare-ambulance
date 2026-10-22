@@ -1,0 +1,19 @@
+[
+  { "name": "Silk Board Junction", "lat": 12.91604, "lng": 77.62391, "radiusM": 1200, "severity": 1.0 },
+  { "name": "Tin Factory flyover (KR Puram)", "lat": 12.99873, "lng": 77.6731, "radiusM": 1000, "severity": 0.9 },
+  { "name": "Hebbal flyover", "lat": 13.04286, "lng": 77.59042, "radiusM": 1000, "severity": 0.9 },
+  { "name": "Marathahalli bridge", "lat": 12.95662, "lng": 77.70134, "radiusM": 900, "severity": 0.85 },
+  { "name": "Bellandur and Sarjapur Road", "lat": 12.92193, "lng": 77.66816, "radiusM": 900, "severity": 0.8 },
+  { "name": "Majestic (Kempegowda Bus Station)", "lat": 12.97818, "lng": 77.57219, "radiusM": 800, "severity": 0.85 },
+  { "name": "KR Market", "lat": 12.96359, "lng": 77.57745, "radiusM": 700, "severity": 0.8 },
+  { "name": "Electronic City toll", "lat": 12.84546, "lng": 77.66564, "radiusM": 900, "severity": 0.7 },
+  { "name": "Koramangala Sony World", "lat": 12.93816, "lng": 77.62805, "radiusM": 700, "severity": 0.75 },
+  { "name": "Indiranagar 100 Feet Road", "lat": 12.97023, "lng": 77.64133, "radiusM": 700, "severity": 0.65 },
+  { "name": "MG Road", "lat": 12.97539, "lng": 77.6065, "radiusM": 700, "severity": 0.65 },
+  { "name": "Yeshwanthpur Circle", "lat": 13.01757, "lng": 77.55972, "radiusM": 800, "severity": 0.7 },
+  { "name": "Banashankari bus stand", "lat": 12.91663, "lng": 77.57307, "radiusM": 600, "severity": 0.55 },
+  { "name": "Jayanagar 4th Block", "lat": 12.92982, "lng": 77.58428, "radiusM": 600, "severity": 0.5 },
+  { "name": "Richmond Circle", "lat": 12.96494, "lng": 77.59689, "radiusM": 600, "severity": 0.6 },
+  { "name": "Mekhri Circle", "lat": 13.01997, "lng": 77.58371, "radiusM": 700, "severity": 0.6 },
+  { "name": "Nayandahalli junction", "lat": 12.94532, "lng": 77.52809, "radiusM": 700, "severity": 0.6 }
+]

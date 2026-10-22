@@ -30,6 +30,7 @@ export default function MapView({
   hospital,
   start,
   height = 420,
+  inset,
 }: {
   routes?: MapRoute[];
   signals?: MapSignal[];
@@ -37,6 +38,8 @@ export default function MapView({
   hospital?: { lat: number; lng: number; name: string };
   start?: { lat: number; lng: number };
   height?: number | string;
+  /** For a full-screen map with bars over its top and bottom: the share of the map's height they cover. */
+  inset?: { top: number; bottom: number };
 }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -133,7 +136,14 @@ export default function MapView({
       const lats = pts.map((p) => p[0]);
       const lngs = pts.map((p) => p[1]);
       const bounds = L.latLngBounds([Math.min(...lats), Math.min(...lngs)], [Math.max(...lats), Math.max(...lngs)]);
-      if (framed) {
+      if (framed && inset) {
+        // Bars over the top and bottom: keep the route in the band of map between them.
+        const h = map.getSize().y;
+        map.fitBounds(bounds, {
+          paddingTopLeft: [32, Math.round(h * inset.top)],
+          paddingBottomRight: [32, Math.round(h * inset.bottom)],
+        });
+      } else if (framed) {
         const narrow = window.innerWidth < 900;
         map.fitBounds(bounds, narrow
           ? { paddingTopLeft: [40, 40], paddingBottomRight: [40, Math.round(map.getSize().y * 0.6)] }
