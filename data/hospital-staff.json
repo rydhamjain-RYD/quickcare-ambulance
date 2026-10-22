@@ -1,0 +1,17 @@
+[
+  {
+    "id": "HOSP-MAN-01", "pin": "5190", "hospitalId": "manipal-old-airport",
+    "registration": "SAMPLE-KPME-0101", "address": "HAL Old Airport Road, Kodihalli, Bengaluru",
+    "emergencyDesk": "Emergency desk, Ext. 101", "staffName": "Dr. Kavya Rao", "staffRole": "Emergency Medical Officer"
+  },
+  {
+    "id": "HOSP-RNG-01", "pin": "8264", "hospitalId": "rangadore",
+    "registration": "SAMPLE-KPME-0102", "address": "D V Gundappa Road, Basavanagudi, Bengaluru",
+    "emergencyDesk": "Emergency desk, Ext. 102", "staffName": "Dr. Arjun Shetty", "staffRole": "Casualty Medical Officer"
+  },
+  {
+    "id": "HOSP-MJH-01", "pin": "3377", "hospitalId": "mahaveer-jain",
+    "registration": "SAMPLE-KPME-0103", "address": "Millers Road, Vasanth Nagar, Bengaluru",
+    "emergencyDesk": "Emergency desk, Ext. 103", "staffName": "Nurse Priya Menon", "staffRole": "Emergency Charge Nurse"
+  }
+]

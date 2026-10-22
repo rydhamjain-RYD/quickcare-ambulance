@@ -1,5 +1,6 @@
 import { cumulative, headingAt, pointAtDistance, type LngLat } from "./geo";
 import { officerNear } from "./officers";
+import { hospitalDeskOnline } from "./hospitalStaff";
 import { HEAVY_REASONS, type HeavyReason } from "./status";
 import type { RouteOption } from "./routing";
 
@@ -38,6 +39,9 @@ export type Trip = {
   lastTickAt: number;
   startedAt: number;
   reroutes: number;
+  rerouting?: boolean; // true while the server is picking a new route, so the app does not flash a warning
+  notice?: { text: string; at: number }; // what the app just did for the crew, e.g. an automatic reroute
+  hospitalAck?: { by: string; role: string; at: number }; // the hospital confirmed its team is ready
   alerts: SignalAlert[];
 };
 
@@ -45,6 +49,7 @@ export type ViewAlert = SignalAlert & { onDuty?: { name: string; badge: string }
 
 export type TripView = Omit<Trip, "alerts"> & {
   alerts: ViewAlert[];
+  hospitalDesk: { online: boolean };
   position: LngLat;
   baseSpeedMps: number;
   remainingM: number;
@@ -126,6 +131,18 @@ export function replaceRoute(route: RouteOption): boolean {
   return true;
 }
 
+export function setRerouting(on: boolean) {
+  if (g.__qcTrip) g.__qcTrip.rerouting = on;
+}
+
+export function setNotice(text: string) {
+  if (g.__qcTrip) g.__qcTrip.notice = { text, at: Date.now() };
+}
+
+export function setHospitalAck(by: string, role: string) {
+  if (g.__qcTrip) g.__qcTrip.hospitalAck = { by, role, at: Date.now() };
+}
+
 export function setSpeed(speed: number) {
   const t = g.__qcTrip;
   if (!t) return;
@@ -190,6 +207,7 @@ export function view(): TripView | null {
   return {
     ...t,
     alerts: t.alerts.map((a) => ({ ...a, onDuty: officerNear(a.lat, a.lng) })),
+    hospitalDesk: { online: hospitalDeskOnline(t.hospital.lat, t.hospital.lng) },
     position: pointAtDistance(t.route.coords, cum, t.progressM),
     baseSpeedMps: base,
     remainingM,

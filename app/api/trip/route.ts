@@ -2,8 +2,16 @@ import { replaceRoute, resetTrip, setSpeed, SPEEDS, startTrip, view, type Trip }
 import { planRoutes, RoutingError, type RouteOption } from "@/lib/routing";
 import { summarizeNote } from "@/lib/summarize";
 
+/** The trip as drivers and officers may see it. The patient note is private to the hospital, so it is left out. */
+function publicView() {
+  const v = view();
+  if (!v) return null;
+  const { note: _note, ...rest } = v; // eslint-disable-line @typescript-eslint/no-unused-vars
+  return rest;
+}
+
 export async function GET() {
-  return Response.json({ trip: view() });
+  return Response.json({ trip: publicView() });
 }
 
 export async function POST(request: Request) {
@@ -28,14 +36,14 @@ export async function POST(request: Request) {
     const raw = body.note?.raw?.trim();
     const note = raw ? await summarizeNote(raw.slice(0, 500)) : undefined;
     startTrip({ hospital: body.hospital, start: body.start, route: body.route, note });
-    return Response.json({ trip: view() });
+    return Response.json({ trip: publicView() });
   }
   if (body.action === "speed") {
     if (!SPEEDS.includes(body.speed as (typeof SPEEDS)[number])) {
       return Response.json({ error: `Speed must be one of ${SPEEDS.join(", ")}.` }, { status: 400 });
     }
     setSpeed(body.speed as number);
-    return Response.json({ trip: view() });
+    return Response.json({ trip: publicView() });
   }
   if (body.action === "reroute-options") {
     // Plan new routes from where the ambulance is now, steering clear of signals the officer reported.
@@ -54,7 +62,7 @@ export async function POST(request: Request) {
   if (body.action === "switch-route") {
     if (!body.route?.coords?.length) return Response.json({ error: "No route was chosen." }, { status: 400 });
     if (!replaceRoute(body.route)) return Response.json({ error: "No trip is in progress." }, { status: 409 });
-    return Response.json({ trip: view() });
+    return Response.json({ trip: publicView() });
   }
   if (body.action === "reset") {
     resetTrip();

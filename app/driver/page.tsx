@@ -368,7 +368,11 @@ function TripScreen({
 
   // The nearest signal ahead that an officer reported as heavy or blocked, if the crew has not dismissed it yet.
   const keyOf = (a: ViewAlert) => `${trip.id}|${trip.reroutes}|${a.signalId}|${a.status}|${a.reason ?? ""}`;
-  const popup = trip.alerts.find((a) => (a.status === "heavy" || a.status === "cannot") && a.alongM > trip.progressM && !dismissed.includes(keyOf(a)));
+  // Not while the server is already choosing a new route automatically.
+  const popup = trip.rerouting
+    ? undefined
+    : trip.alerts.find((a) => (a.status === "heavy" || a.status === "cannot") && a.alongM > trip.progressM && !dismissed.includes(keyOf(a)));
+  const showNotice = !!trip.notice && Date.now() - trip.notice.at < 120_000;
 
   return (
     <main className="page">
@@ -381,6 +385,26 @@ function TripScreen({
         <div className="stat"><b>{fmtKm(trip.remainingM)}</b><span>remaining</span></div>
         <div className="stat"><b>{trip.nextSignal ? `#${trip.nextSignal.index} in ${fmtKm(trip.nextSignal.distanceM)}` : "None"}</b><span>next signal</span></div>
       </div>
+
+      <div className="legend" style={{ margin: "4px 0 0" }}>
+        <span>
+          <Lens color={trip.hospitalDesk.online ? "#0e9f6e" : "#64748b"} small />
+          {trip.hospitalDesk.online ? "Hospital emergency desk is online" : "Hospital emergency desk is not logged in"}
+        </span>
+        {trip.hospitalAck && (
+          <span>
+            <Lens color="#0e9f6e" small />
+            <b>Team ready</b> · confirmed by {trip.hospitalAck.by}
+          </span>
+        )}
+      </div>
+
+      {showNotice && trip.notice && (
+        <div className="banner orange" role="status">
+          <Lens color="#fff" />
+          <span><b>Route update.</b> {trip.notice.text}</span>
+        </div>
+      )}
 
       {nextAlert && (
         <div className={`banner ${BANNER_CLASS[nextAlert.status]}`} role="status">

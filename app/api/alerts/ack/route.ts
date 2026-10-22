@@ -1,5 +1,7 @@
 import { covers, officerFromRequest } from "@/lib/officers";
-import { HEAVY_REASONS, getTripRaw, respond, view, type HeavyReason } from "@/lib/trip";
+import { HEAVY_REASONS, REASON_LABEL } from "@/lib/status";
+import { autoReroute } from "@/lib/reroute";
+import { getTripRaw, respond, type HeavyReason } from "@/lib/trip";
 
 export async function POST(request: Request) {
   const officer = officerFromRequest(request);
@@ -24,5 +26,10 @@ export async function POST(request: Request) {
 
   const r = respond(body.signalId, body.answer, { name: officer.name, badge: officer.badge }, reason);
   if (!r.ok) return Response.json({ error: r.error }, { status: 409 });
-  return Response.json({ trip: view() });
+
+  // Heavy traffic: switch the ambulance to the best alternative route straight away.
+  if (body.answer === "heavy") {
+    await autoReroute(REASON_LABEL[reason ?? "congestion"], officer.name);
+  }
+  return Response.json({ ok: true });
 }
