@@ -1,11 +1,13 @@
 "use client";
 import { fmtKm, useTrip } from "@/lib/useTrip";
+import BackLink from "@/components/BackLink";
 
 export default function ControlPage() {
   const { trip, loaded, error } = useTrip();
   const flagged = trip?.alerts.filter((a) => a.status === "unanswered" || a.status === "cannot") ?? [];
   return (
     <main className="page narrow">
+      <BackLink />
       <h1>Control room</h1>
       <p className="muted">Shows junctions where the officer did not answer in time, or replied that they can&apos;t clear.</p>
       {error && <p className="warn">{error}</p>}

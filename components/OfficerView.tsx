@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import BackLink from "./BackLink";
 import { fmtKm, fmtMin, useTrip } from "@/lib/useTrip";
 import { STATUS } from "@/lib/status";
 
@@ -30,6 +31,7 @@ export default function OfficerView({ signalId }: { signalId: string }) {
 
   return (
     <main className="page narrow">
+      <BackLink href="/officer" label="All junctions" />
       <h1>Traffic officer</h1>
       <p className="muted">Junction {signalId}</p>
       {error && <p className="warn">{error}</p>}

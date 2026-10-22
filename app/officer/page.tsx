@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import BackLink from "@/components/BackLink";
 import { fmtKm, useTrip } from "@/lib/useTrip";
 import { STATUS } from "@/lib/status";
 
@@ -8,6 +9,7 @@ export default function OfficerIndex() {
   const { trip, loaded, error } = useTrip();
   return (
     <main className="page narrow">
+      <BackLink />
       <h1>Officer pages</h1>
       <p className="muted">Demo only. Each junction on the active route has its own page. In real use each officer would receive only their own link.</p>
       {error && <p className="warn">{error}</p>}

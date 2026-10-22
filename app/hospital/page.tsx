@@ -1,5 +1,6 @@
 "use client";
 import Map from "@/components/Map";
+import BackLink from "@/components/BackLink";
 import { fmtKm, fmtMin, useTrip } from "@/lib/useTrip";
 
 export default function HospitalPage() {
@@ -7,6 +8,7 @@ export default function HospitalPage() {
   const arrival = trip ? new Date(Date.now() + trip.etaS * 1000) : null;
   return (
     <main className="page narrow">
+      <BackLink />
       <h1>Hospital: incoming ambulance</h1>
       {error && <p className="warn">{error}</p>}
       {loaded && !trip && <div className="panel">No ambulance is heading here right now.</div>}

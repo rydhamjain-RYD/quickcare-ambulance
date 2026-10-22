@@ -34,7 +34,9 @@ h2 { font-size: 1.1rem; margin: 18px 0 8px; }
 .btn.big { padding: 14px 22px; font-size: 1.1rem; font-weight: 600; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.pickup { background: #eff6ff; border: 1px solid var(--blue); border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
+.pickup { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: #eff6ff; border: 1px solid var(--blue); border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
+.back { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; margin-bottom: 4px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--fg); text-decoration: none; font-weight: 600; }
+.back:hover { background: #eff6ff; border-color: var(--blue); }
 .places { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
 .place { width: 100%; text-align: left; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 8px; font: inherit; cursor: pointer; }
 .place.on { border-color: var(--blue); background: #eff6ff; }

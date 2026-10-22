@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import Map from "@/components/Map";
+import BackLink from "@/components/BackLink";
 import { fmtKm, fmtMin, useTrip } from "@/lib/useTrip";
 import type { RouteOption } from "@/lib/routing";
 import { STATUS } from "@/lib/status";
@@ -36,6 +37,8 @@ export default function DriverPage() {
     setPPlaces([]);
     setPMsg(null);
     setOptions(null);
+    // If a hospital is already chosen, plan the new route straight away.
+    if (hospital) findRoutes(hospital, p);
   }
 
   async function searchPickup() {
@@ -118,11 +121,11 @@ export default function DriverPage() {
     }
   }
 
-  async function findRoutes(h: Place) {
+  async function findRoutes(h: Place, from: Pickup | null = start) {
     setHospital(h);
     setMsg(null);
     setOptions(null);
-    if (!start) {
+    if (!from) {
       setMsg("Set the pickup location first, above.");
       return;
     }
@@ -131,7 +134,7 @@ export default function DriverPage() {
       const res = await fetch("/api/routes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from: { lat: start.lat, lng: start.lng }, to: { lat: h.lat, lng: h.lng } }),
+        body: JSON.stringify({ from: { lat: from.lat, lng: from.lng }, to: { lat: h.lat, lng: h.lng } }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Routing failed");
@@ -184,6 +187,7 @@ export default function DriverPage() {
     const done = trip.status === "arrived";
     return (
       <main className="page">
+        <BackLink />
         <h1>Driver: heading to {trip.hospital.name}</h1>
         {error && <p className="warn">{error}</p>}
         <div className="stats">
@@ -225,27 +229,42 @@ export default function DriverPage() {
   const sel = options?.find((o) => o.id === chosen);
   return (
     <main className="page">
+      <BackLink />
       <h1>Driver: plan the route</h1>
       {error && <p className="warn">{error}</p>}
-      <label className="field">
-        Patient pickup location
-        <div className="row">
-          <input value={pQuery} placeholder="Address or landmark, e.g. 5th Block Koramangala" onChange={(e) => setPQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && searchPickup()} />
-          <button className="btn on" onClick={searchPickup} disabled={busy}>Search</button>
-          <button className="btn" onClick={useCurrentLocation} disabled={busy}>Use my current location</button>
+      {pickup ? (
+        <div className="pickup">
+          <span>Pickup: <b>{pickup.name}</b></span>
+          <button className="btn" onClick={() => { setPickup(null); setOptions(null); }}>Change</button>
         </div>
-      </label>
-      {pMsg && <p className="warn">{pMsg}</p>}
-      {pPlaces.length > 0 && (
-        <ul className="places">
-          {pPlaces.map((p) => (
-            <li key={p.id}>
-              <button className="place" onClick={() => choosePickup({ name: p.name, lat: p.lat, lng: p.lng })}>{p.name}</button>
-            </li>
-          ))}
-        </ul>
+      ) : (
+        <>
+          <label className="field">
+            Patient pickup location
+            <div className="row">
+              <input value={pQuery} placeholder="Address or landmark, e.g. 5th Block Koramangala" onChange={(e) => setPQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && searchPickup()} />
+              <button className="btn on" onClick={searchPickup} disabled={busy}>Search</button>
+              <button className="btn" onClick={useCurrentLocation} disabled={busy}>Use my current location</button>
+            </div>
+          </label>
+          {pMsg && <p className="warn">{pMsg}</p>}
+          {pPlaces.length > 0 && (
+            <ul className="places">
+              {pPlaces.map((p) => (
+                <li key={p.id}>
+                  <button className="place" onClick={() => choosePickup({ name: p.name, lat: p.lat, lng: p.lng })}>{p.name}</button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
-      {pickup && <p className="pickup">Pickup: <b>{pickup.name}</b></p>}
+      {hospital && (options || msg) ? (
+        <div className="pickup">
+          <span>Hospital: <b>{hospital.name}</b></span>
+          <button className="btn" onClick={() => { setHospital(null); setOptions(null); setMsg(null); }}>Change</button>
+        </div>
+      ) : (
       <label className="field">
         Hospital the family chose
         <div className="row">
@@ -253,8 +272,9 @@ export default function DriverPage() {
           <button className="btn on" onClick={search} disabled={busy}>Search</button>
         </div>
       </label>
+      )}
       {searchMsg && <p className="warn">{searchMsg}</p>}
-      {places.length > 0 && (
+      {places.length > 0 && !(hospital && (options || msg)) && (
         <ul className="places">
           {places.map((p) => (
             <li key={p.id}>
