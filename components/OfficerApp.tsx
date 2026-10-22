@@ -358,7 +358,7 @@ function Dashboard({
       {live && trip && (
         <div className="alertbox" style={{ borderColor: STATUS[live.status].color }}>
           <h2>Ambulance coming</h2>
-          <p className="big">Heading <b>{live.direction}</b> through your junction. Arrives in about <b>{fmtMin(distOf(live) / trip.baseSpeedMps)}</b> ({fmtKm(distOf(live))} away).</p>
+          <p className="big">Heading <b>{live.direction}</b> through your junction{live.name ? <> (<b>{live.name}</b>)</> : ""}. Arrives in about <b>{fmtMin(distOf(live) / trip.baseSpeedMps)}</b> ({fmtKm(distOf(live))} away).</p>
           <p className="muted">Taking a patient to {trip.hospital}.</p>
           {answered && (
             <p className="current" style={{ borderColor: STATUS[live.status].color, color: STATUS[live.status].color }}>

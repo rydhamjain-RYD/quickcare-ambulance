@@ -285,6 +285,7 @@ export default function RoutePlannerPage() {
             {options.map((o) => (
               <button key={o.id} className={chosen === o.id ? "card on" : "card"} onClick={() => setChosen(o.id)}>
                 <b>{o.labels.map((l) => (l === "quickest" ? "Quickest" : "Fewest signals")).join(" and ")}</b>
+                {o.roads && o.roads.length > 0 && <span className="via">via {o.roads.join(", ")}</span>}
                 <span className="time">{fmtMin(o.durationS)} <small>total, with traffic</small></span>
                 {timeParts(o) && <span>{timeParts(o)!.normal} min normal + {timeParts(o)!.extra} min traffic</span>}
                 <span>{fmtKm(o.distanceM)} · {o.signals.length} signals</span>
@@ -293,6 +294,14 @@ export default function RoutePlannerPage() {
             ))}
           </div>
           {options.length === 1 && <p className="muted">The quickest route is also the one with the fewest signals.</p>}
+          {sel && sel.signals.length > 0 && (
+            <details className="fold">
+              <summary>Signals on the chosen route ({sel.signals.length})</summary>
+              <ol className="plainlist">
+                {sel.signals.map((s, i) => <li key={s.id}>{i + 1}. {s.name}</li>)}
+              </ol>
+            </details>
+          )}
           {TEST_MODE && (
             <label className="field tight" style={{ marginTop: 8 }}>
               Test mode: pretend it is
@@ -360,6 +369,7 @@ function TripScreen({
         <button className="grab" onClick={() => setCollapsed((c) => !c)} aria-label={collapsed ? "Show details" : "Hide details"} />
         {error && <p className="errbox">{error}</p>}
         <p className="dest">Heading to {trip.hospital.name}</p>
+        {trip.route.roads && trip.route.roads.length > 0 && <p className="muted" style={{ margin: "0 2px 8px" }}>Route: via {trip.route.roads.join(", ")}</p>}
 
         <div className="eta">
           <span>
@@ -376,7 +386,7 @@ function TripScreen({
           <div className={`banner ${BANNER_CLASS[nextAlert.status]}`} role="status">
             <Lens color="#fff" />
             <span>
-              <b>Signal #{nextAlert.index}, {fmtKm(nextAlert.alongM - trip.progressM)} ahead.</b> {advice(nextAlert)}
+              <b>Signal #{nextAlert.index}{nextAlert.name ? `, ${nextAlert.name}` : ""}, {fmtKm(nextAlert.alongM - trip.progressM)} ahead.</b> {advice(nextAlert)}
               {nextAlert.answeredBy && <> Reply from {nextAlert.answeredBy.name}.</>}
             </span>
           </div>
@@ -427,7 +437,8 @@ function TripScreen({
               <li key={a.signalId}>
                 <Lens color={STATUS[a.status].color}>{a.index}</Lens>
                 <span className="what">
-                  <b>{fmtKm(Math.max(0, a.alongM - trip.progressM))} {a.alongM <= trip.progressM ? "(passed)" : "ahead"} · heading {a.direction}</b>
+                  <b>{a.name ?? `Signal ${a.index}`}</b>
+                  <small>{fmtKm(Math.max(0, a.alongM - trip.progressM))} {a.alongM <= trip.progressM ? "(passed)" : "ahead"} · heading {a.direction}</small>
                   <small>
                     {a.onDuty ? <>Officer: {a.onDuty.name} ({a.onDuty.badge})</> : "No officer posted"}
                     {a.status === "heavy" && a.reason ? ` · ${REASON_LABEL[a.reason]}` : ""}

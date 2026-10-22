@@ -151,6 +151,9 @@ p { margin: 8px 0; }
 }
 .planpanel .cards { margin-top: 0; }
 .card .slow { font-size: 0.8rem; color: var(--muted); }
+.card .via { font-size: 0.85rem; font-weight: 600; color: var(--ink, inherit); }
+.plainlist { margin: 6px 0 0; padding: 0; list-style: none; font-size: 0.9rem; max-height: 140px; overflow: auto; }
+.plainlist li { padding: 3px 0; }
 .card .time small { font-size: 0.8rem; font-weight: 600; color: var(--muted); letter-spacing: 0; }
 .card .pill { align-self: flex-start; margin-top: 4px; }
 

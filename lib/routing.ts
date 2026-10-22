@@ -8,6 +8,8 @@ export type Signal = { id: string; lat: number; lng: number; name?: string | nul
 export type RouteOption = {
   id: string;
   labels: ("quickest" | "fewest-signals")[];
+  /** The main roads the route follows, in driving order (e.g. "Outer Ring Road"). */
+  roads?: string[];
   distanceM: number;
   durationS: number;
   coords: LngLat[];
@@ -76,15 +78,15 @@ export class RoutingError extends Error {}
 
 const AVOID_RADIUS_M = 60; // a route passing this close to a blocked signal is dropped
 
-type RawRoute = { distanceM: number; durationS: number; coords: LngLat[] };
+type RawRoute = { distanceM: number; durationS: number; coords: LngLat[]; roads: string[] };
 
 /** Ask the public OSRM server for driving routes through the given points, in order. */
 async function osrmRoutes(points: { lat: number; lng: number }[], alternatives: number): Promise<RawRoute[]> {
   const path = points.map((p) => `${p.lng},${p.lat}`).join(";");
   // Alternatives only work with two points.
   const alt = points.length === 2 && alternatives > 0 ? `alternatives=${alternatives}` : "alternatives=false";
-  const url = `https://router.project-osrm.org/route/v1/driving/${path}?${alt}&overview=full&geometries=geojson&steps=false`;
-  let data: { code: string; routes?: { distance: number; duration: number; geometry: { coordinates: LngLat[] } }[] };
+  const url = `https://router.project-osrm.org/route/v1/driving/${path}?${alt}&overview=full&geometries=geojson&steps=true`;
+  let data: { code: string; routes?: { distance: number; duration: number; geometry: { coordinates: LngLat[] }; legs: { steps: { name: string; distance: number }[] }[] }[] };
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(15000), cache: "no-store" });
     if (!res.ok) throw new Error(`routing service returned ${res.status}`);
@@ -93,7 +95,68 @@ async function osrmRoutes(points: { lat: number; lng: number }[], alternatives: 
     throw new RoutingError(`Could not reach the routing service (${(e as Error).message}). Try again.`);
   }
   if (data.code !== "Ok" || !data.routes?.length) return [];
-  return data.routes.map((r) => ({ distanceM: Math.round(r.distance), durationS: Math.round(r.duration), coords: r.geometry.coordinates }));
+  return data.routes.map((r) => ({
+    distanceM: Math.round(r.distance),
+    durationS: Math.round(r.duration),
+    coords: r.geometry.coordinates,
+    roads: mainRoads(r.legs),
+  }));
+}
+
+/** The three roads the route spends the most distance on, listed in the order they are driven. */
+function mainRoads(legs: { steps: { name: string; distance: number }[] }[]): string[] {
+  const total = new Map<string, number>();
+  const order: string[] = [];
+  for (const leg of legs) {
+    for (const st of leg.steps) {
+      if (!st.name) continue;
+      if (!total.has(st.name)) order.push(st.name);
+      total.set(st.name, (total.get(st.name) ?? 0) + st.distance);
+    }
+  }
+  const top = new Set([...total.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([n]) => n));
+  return order.filter((n) => top.has(n));
+}
+
+const placeCache = new Map<string, string>();
+
+/** Names a signal after the roads that meet there (roads within 40 m of it). Cached per signal. */
+async function junctionName(s: Signal): Promise<string | null> {
+  const hit = placeCache.get(s.id);
+  if (hit) return hit;
+  try {
+    const res = await fetch(`https://router.project-osrm.org/nearest/v1/driving/${s.lng},${s.lat}?number=10`, { signal: AbortSignal.timeout(8000), cache: "no-store" });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { waypoints?: { name: string; distance: number }[] };
+    const named = (data.waypoints ?? []).filter((w) => w.name);
+    const close = named.filter((w) => w.distance <= 40);
+    const names = [...new Set((close.length > 0 ? close : named.slice(0, 1)).map((w) => w.name))].slice(0, 2);
+    if (names.length === 0) return null;
+    const label = names.join(" & ");    placeCache.set(s.id, label);
+    return label;
+  } catch {
+    return null;
+  }
+}
+
+/** Fills in the name of every signal on the given routes that has none. */
+async function nameSignals(options: RouteOption[]) {
+  const byId = new Map<string, Signal>();
+  options.forEach((o) => o.signals.forEach((s) => { if (!s.name) byId.set(s.id, s); }));
+  const found = new Map<string, string | null>();
+  // A handful at a time, because the public server turns away a burst of requests.
+  const todo = [...byId.values()];
+  for (let i = 0; i < todo.length; i += 5) {
+    await Promise.all(todo.slice(i, i + 5).map(async (s) => {
+      let n = await junctionName(s);
+      if (!n) { await new Promise((r) => setTimeout(r, 600)); n = await junctionName(s); }
+      found.set(s.id, n);
+    }));
+  }
+  // The same signal can be on more than one route, so name every copy.
+  options.forEach((o) => o.signals.forEach((s) => { if (!s.name) s.name = found.get(s.id) ?? null; }));
+  // Anything that could not be named still gets a readable label.
+  options.forEach((o) => o.signals.forEach((s, i) => { s.name = s.name ?? `Signal ${i + 1}`; }));
 }
 
 export async function planRoutes(
@@ -160,6 +223,7 @@ export async function planRoutes(
   const toOption = (c: (typeof withSignals)[number], labels: RouteOption["labels"]): RouteOption => ({
     id: c.id,
     labels,
+    roads: c.roads,
     distanceM: c.distanceM,
     durationS: c.durationS,
     coords: c.coords,
@@ -177,5 +241,6 @@ export async function planRoutes(
       ? [toOption(quickest, ["quickest", "fewest-signals"])]
       : [toOption(quickest, ["quickest"]), toOption(fewest, ["fewest-signals"])];
 
+  await nameSignals(options);
   return { options, source: "osrm" };
 }

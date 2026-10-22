@@ -17,6 +17,7 @@ export type { HeavyReason };
 export type SignalAlert = {
   signalId: string;
   index: number; // 1-based position on the route
+  name?: string; // the roads that meet at this signal
   lat: number;
   lng: number;
   alongM: number;
@@ -72,6 +73,7 @@ function buildAlerts(route: RouteOption, cum: number[], previous?: SignalAlert[]
     return {
       signalId: s.id,
       index: i + 1,
+      name: s.name ?? undefined,
       lat: s.lat,
       lng: s.lng,
       alongM: s.alongM,
