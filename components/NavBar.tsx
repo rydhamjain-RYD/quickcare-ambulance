@@ -4,7 +4,6 @@ import { usePathname } from "next/navigation";
 
 // The app is a route planner. Officers and hospitals have their own logins, kept small and out of the way.
 const LINKS = [
-  { href: "/demo", label: "Live demo" },
   { href: "/officer", label: "Officer login" },
   { href: "/hospital", label: "Hospital login" },
 ];

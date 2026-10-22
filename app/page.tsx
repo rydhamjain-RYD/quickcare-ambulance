@@ -1,6 +1,5 @@
 "use client";
-import { useState } from "react";
-import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import Map from "@/components/Map";
 import Lens from "@/components/Lens";
 import SearchBox from "@/components/SearchBox";
@@ -8,19 +7,16 @@ import { fmtKm, fmtMin, useTrip } from "@/lib/useTrip";
 import { REASON_LABEL, STATUS } from "@/lib/status";
 import type { RouteOption } from "@/lib/routing";
 import type { AlertStatus, TripView, ViewAlert } from "@/lib/trip";
+import { TEST_MODE, TEST_TRIP } from "@/lib/testMode";
 
 type Place = { id: string; name: string; lat: number; lng: number; source: string };
 type Pickup = { name: string; lat: number; lng: number };
 type RerouteState = { loading: boolean; options: RouteOption[] | null; blocked: boolean; error: string | null };
 
-// Signal data and routing in this demo cover Bengaluru only.
+// Signal data and routing in this version cover Bengaluru only.
 const inBengaluru = (lat: number, lng: number) => lat >= 12.83 && lat <= 13.1 && lng >= 77.45 && lng <= 77.75;
 
 const ROUTE_COLORS = ["#1456f0", "#f06a1a"];
-
-// Demo trip: an example pickup in Jayanagar to Manipal Hospital on Old Airport Road (about 12 km, 18 signals).
-const DEMO_PICKUP: Pickup = { name: "Jayanagar 4th Block (demo pickup)", lat: 12.9265737, lng: 77.5835041 };
-const DEMO_HOSPITAL: Place = { id: "manipal-old-airport", name: "Manipal Hospital, Old Airport Road (demo drop)", lat: 12.959846, lng: 77.649214, source: "saved" };
 
 const BANNER_CLASS: Record<AlertStatus, string> = {
   waiting: "gray", alerted: "amber", cleared: "green", heavy: "orange", cannot: "red", unanswered: "violet",
@@ -55,6 +51,15 @@ export default function RoutePlannerPage() {
 
   const start = pickup;
 
+  // Test mode only: open with a ready trip (pickup, hospital and routes) so one tap starts it.
+  const testStarted = useRef(false);
+  useEffect(() => {
+    if (!TEST_MODE || !loaded || trip || testStarted.current) return;
+    testStarted.current = true;
+    setPickup(TEST_TRIP.pickup);
+    findRoutes(TEST_TRIP.hospital, TEST_TRIP.pickup);
+  }, [loaded, trip]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function choosePickup(p: Pickup) {
     setPickup(p);
     setPMsg(null);
@@ -75,7 +80,7 @@ export default function RoutePlannerPage() {
         setBusy(false);
         const { latitude: lat, longitude: lng } = pos.coords;
         if (!inBengaluru(lat, lng)) {
-          setPMsg("Your location is outside Bengaluru, where this demo has signal data. Type a Bengaluru address instead.");
+          setPMsg("Your location is outside Bengaluru, where this version has signal data. Type a Bengaluru address instead.");
           return;
         }
         choosePickup({ name: "My current location", lat, lng });
@@ -198,20 +203,7 @@ export default function RoutePlannerPage() {
       <div className="sheet">
         <h1>Where to?</h1>
         <p className="sub">
-          Enter the pickup and the hospital to get the route and every signal on it.{" "}
-          <button
-            className="btn link"
-            disabled={busy}
-            onClick={() => {
-              setPickup(DEMO_PICKUP);
-              setPMsg(null);
-              findRoutes(DEMO_HOSPITAL, DEMO_PICKUP);
-            }}
-          >
-            Try a demo trip
-          </button>
-          {" · "}
-          <Link href="/demo">Live demo on all 3 screens</Link>
+          Enter the pickup and the hospital to get the route and every signal on it.
         </p>
         {error && <p className="errbox">{error}</p>}
 
@@ -360,12 +352,14 @@ function TripScreen({
           <button className="btn on sm" onClick={findAnotherRoute} disabled={done}>Find another route</button>
           <button className="btn danger sm" onClick={() => post({ action: "reset" })}>End trip</button>
         </div>
-        <div className="row" style={{ marginTop: 0 }}>
-          <span className="muted">Demo speed</span>
-          {[1, 4, 8, 16].map((s) => (
-            <button key={s} className={trip.speed === s ? "btn on sm" : "btn sm"} onClick={() => post({ action: "speed", speed: s })}>{s}x</button>
-          ))}
-        </div>
+        {TEST_MODE && (
+          <div className="row" style={{ marginTop: 0 }}>
+            <span className="muted">Test speed</span>
+            {[1, 4, 8, 16].map((s) => (
+              <button key={s} className={trip.speed === s ? "btn on sm" : "btn sm"} onClick={() => post({ action: "speed", speed: s })}>{s}x</button>
+            ))}
+          </div>
+        )}
 
         <details className="fold" open>
           <summary>Signals on this route ({trip.alerts.length})</summary>

@@ -7,6 +7,7 @@ import SearchBox from "./SearchBox";
 import { fmtKm, fmtMin } from "@/lib/useTrip";
 import { HEAVY_REASONS, REASON_LABEL, STATUS, type HeavyReason } from "@/lib/status";
 import type { OfficerAnswer, ViewAlert } from "@/lib/trip";
+import { TEST_MODE, TEST_OFFICERS } from "@/lib/testMode";
 
 type Officer = { badge: string; name: string; rank: string; station: string };
 type Posting = { lat: number; lng: number; label: string; since: number; date: string };
@@ -17,20 +18,6 @@ type AlertsData = {
 type Spot = { lat: number; lng: number; distanceM: number };
 
 const TOKEN_KEY = "qc_officer_token";
-// Sample accounts shown on the login screen so a demo can be run quickly. Same list as data/officers.json.
-const DEMO_OFFICERS = [
-  { badge: "BLR-TP-1001", pin: "4821", name: "Ravi Kumar" },
-  { badge: "BLR-TP-1002", pin: "7305", name: "Anitha Gowda" },
-  { badge: "BLR-TP-1003", pin: "1948", name: "Suresh Naik" },
-  { badge: "BLR-TP-1004", pin: "6612", name: "Meena Reddy" },
-  { badge: "BLR-TP-1005", pin: "2753", name: "Imran Sheikh" },
-  { badge: "BLR-TP-1006", pin: "9036", name: "Lakshmi Devi" },
-  { badge: "BLR-TP-1007", pin: "4417", name: "Prakash Hegde" },
-  { badge: "BLR-TP-1008", pin: "5582", name: "Divya Nair" },
-  { badge: "BLR-TP-1009", pin: "8890", name: "Mohan Raj" },
-  { badge: "BLR-TP-1010", pin: "3361", name: "Farah Khan" },
-];
-
 // sessionStorage keeps the login per browser tab, so several people can act as different officers in different tabs.
 const store = {
   get: () => { try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; } },
@@ -68,45 +55,15 @@ export default function OfficerApp() {
     [token, signOut],
   );
 
-  // Restore a previous login. With ?demo=N the page signs in as demo officer N by itself and takes
-  // a post at junction ?junction=J on the running demo trip, so the live demo needs no setup.
+  // Restore a previous login in this tab.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const demoN = Number(params.get("demo"));
-    const wantDemo = demoN >= 1 && demoN <= DEMO_OFFICERS.length;
-
-    const demoJoin = async () => {
-      try {
-        const o = DEMO_OFFICERS[demoN - 1];
-        const res = await fetch("/api/officer/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ badge: o.badge, pin: o.pin }) });
-        const data = await res.json();
-        if (!res.ok) return;
-        store.set(data.token); setToken(data.token); setOfficer(data.officer); setPosting(data.posting);
-
-        const junction = Number(params.get("junction")) || 3;
-        const trip = await (await fetch("/api/trip", { cache: "no-store" })).json();
-        const a = trip.trip?.alerts?.[junction - 1];
-        if (!a) return; // no demo trip yet: the officer can pick a junction by hand
-        const pr = await fetch("/api/officer/posting", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.token}` },
-          body: JSON.stringify({ lat: a.lat, lng: a.lng, label: `Junction ${junction} on the demo route` }),
-        });
-        const pd = await pr.json();
-        if (pr.ok) setPosting(pd.posting);
-      } catch { /* fall back to the normal login screen */ }
-    };
-
     const t = store.get();
-    if (!t) {
-      (wantDemo ? demoJoin() : Promise.resolve()).finally(() => setReady(true));
-      return;
-    }
+    if (!t) { setReady(true); return; }
     fetch("/api/officer/me", { headers: { Authorization: `Bearer ${t}` }, cache: "no-store" })
       .then(async (r) => ({ ok: r.ok, data: await r.json() }))
-      .then(async ({ ok, data }) => {
+      .then(({ ok, data }) => {
         if (ok) { setToken(t); setOfficer(data.officer); setPosting(data.posting); }
-        else { store.clear(); if (wantDemo) await demoJoin(); }
+        else store.clear();
       })
       .catch(() => { /* server unreachable: show login */ })
       .finally(() => setReady(true));
@@ -150,8 +107,9 @@ export default function OfficerApp() {
 type Call = (path: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; data: any }>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 function LoginScreen({ onLogin }: { onLogin: (t: string, o: Officer, p: Posting | null) => void }) {
-  const [badge, setBadge] = useState("");
-  const [pin, setPin] = useState("");
+  // In test mode the form opens already filled in with a sample officer.
+  const [badge, setBadge] = useState(TEST_MODE ? TEST_OFFICERS[0].badge : "");
+  const [pin, setPin] = useState(TEST_MODE ? TEST_OFFICERS[0].pin : "");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -188,18 +146,21 @@ function LoginScreen({ onLogin }: { onLogin: (t: string, o: Officer, p: Posting 
         {err && <p className="errbox">{err}</p>}
         <button className="btn on big" onClick={submit} disabled={busy} style={{ width: "100%" }}>{busy ? "Checking…" : "Log in"}</button>
       </div>
-      <div className="demo-hint">
-        <b>Demo accounts.</b> Badges are checked against a sample roster, not real police records. Each browser tab keeps its own
-        login, so open several tabs and act as different officers at different junctions.
-        <details style={{ marginTop: 8 }}>
-          <summary style={{ cursor: "pointer", fontWeight: 700, color: "var(--ink)" }}>Show the 10 demo officers</summary>
-          <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
-            {DEMO_OFFICERS.map((o) => (
-              <li key={o.badge}><code>{o.badge}</code> PIN <code>{o.pin}</code> · {o.name}</li>
-            ))}
-          </ul>
-        </details>
-      </div>
+      {TEST_MODE && (
+        <div className="testbox">
+          <b>Test mode.</b> The form is filled in for you. Pick another sample officer to fill it with theirs. Each browser tab keeps its own login.
+          <select
+            aria-label="Sample officer"
+            value={badge}
+            onChange={(e) => {
+              const o = TEST_OFFICERS.find((x) => x.badge === e.target.value);
+              if (o) { setBadge(o.badge); setPin(o.pin); }
+            }}
+          >
+            {TEST_OFFICERS.map((o) => <option key={o.badge} value={o.badge}>{o.name} · {o.badge}</option>)}
+          </select>
+        </div>
+      )}
     </main>
   );
 }
@@ -213,19 +174,20 @@ function PostingScreen({
   const [spots, setSpots] = useState<Spot[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [demoJunctions, setDemoJunctions] = useState<{ index: number; lat: number; lng: number; alongM: number; taken?: string }[]>([]);
+  const [testJunctions, setTestJunctions] = useState<{ index: number; lat: number; lng: number; alongM: number; taken?: string }[]>([]);
 
-  // Demo shortcut: junctions on the ambulance route that is running right now, and who already holds each one.
+  // Test mode only: junctions on the ambulance route that is running right now, and who already holds each one.
   useEffect(() => {
+    if (!TEST_MODE) return;
     let alive = true;
     const load = () =>
       fetch("/api/trip", { cache: "no-store" })
         .then((r) => r.json())
         .then((d) => {
           if (!alive) return;
-          setDemoJunctions(d.trip ? d.trip.alerts.map((a: ViewAlert) => ({ index: a.index, lat: a.lat, lng: a.lng, alongM: a.alongM, taken: a.onDuty?.name })) : []);
+          setTestJunctions(d.trip ? d.trip.alerts.map((a: ViewAlert) => ({ index: a.index, lat: a.lat, lng: a.lng, alongM: a.alongM, taken: a.onDuty?.name })) : []);
         })
-        .catch(() => { if (alive) setDemoJunctions([]); });
+        .catch(() => { if (alive) setTestJunctions([]); });
     load();
     const id = setInterval(load, 3000);
     return () => { alive = false; clearInterval(id); };
@@ -293,14 +255,14 @@ function PostingScreen({
         </>
       )}
 
-      {demoJunctions.length > 0 && (
-        <div className="demo-hint">
-          <b>Demo shortcut.</b> An ambulance trip is running. Pick a junction on its route to receive its alert.
+      {TEST_MODE && testJunctions.length > 0 && (
+        <div className="testbox">
+          <b>Test mode.</b> An ambulance trip is running. Pick a junction on its route to receive its alert.
           Junctions that already have an officer are greyed out, so spread out and cover different ones.
           <div className="reasons">
-            {demoJunctions.map((j) => (
+            {testJunctions.map((j) => (
               <button key={j.index} className="chip" style={j.taken ? { borderColor: "var(--line)", color: "var(--muted)", background: "var(--bg)" } : { borderColor: "var(--primary)", color: "var(--ink)" }} disabled={busy}
-                onClick={() => post(j.lat, j.lng, `Junction ${j.index} on the demo route`)}>
+                onClick={() => post(j.lat, j.lng, `Junction ${j.index} on the route`)}>
                 Junction {j.index} ({fmtKm(j.alongM)}){j.taken ? ` · ${j.taken.split(" ")[0]}` : ""}
               </button>
             ))}
