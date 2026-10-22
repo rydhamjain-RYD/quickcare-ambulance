@@ -1,9 +1,19 @@
 [
   { "id": "manipal-old-airport", "name": "Manipal Hospital, Old Airport Road", "aliases": ["manipal", "manipal hospital", "manipal old airport road"], "lat": 12.959846, "lng": 77.649214 },
   { "id": "manipal-jayanagar", "name": "Malathi Manipal Hospital, Jayanagar", "aliases": ["malathi manipal", "manipal jayanagar"], "lat": 12.917153, "lng": 77.591904 },
+  { "id": "manipal-yeshwantpur", "name": "Manipal Hospital, Yeshwantpur", "aliases": ["manipal yeshwantpur", "manipal malleshwaram"], "lat": 13.014402, "lng": 77.556075 },
   { "id": "mahaveer-jain", "name": "Bhagwan Mahaveer Jain Hospital, Vasanth Nagar", "aliases": ["mahaveer", "mahavir", "mahaveer jain", "mahaveer hospital"], "lat": 12.991652, "lng": 77.595149 },
   { "id": "rangadore", "name": "Rangadore Memorial Hospital, Basavanagudi", "aliases": ["rangadore", "rangadore memorial", "rangadore hospital"], "lat": 12.953988, "lng": 77.571151 },
   { "id": "st-johns", "name": "St. John's Medical College Hospital, Koramangala", "aliases": ["st johns", "saint johns", "st john's"], "lat": 12.929678, "lng": 77.618358 },
   { "id": "victoria", "name": "Victoria Hospital, K.R. Market", "aliases": ["victoria", "victoria hospital"], "lat": 12.963503, "lng": 77.573711 },
-  { "id": "nimhans", "name": "NIMHANS", "aliases": ["nimhans"], "lat": 12.937489, "lng": 77.594142 }
+  { "id": "nimhans", "name": "NIMHANS", "aliases": ["nimhans"], "lat": 12.937489, "lng": 77.594142 },
+  { "id": "apollo-bannerghatta", "name": "Apollo Hospital, Bannerghatta Road", "aliases": ["apollo", "apollo hospital", "apollo bannerghatta"], "lat": 12.896298, "lng": 77.598285 },
+  { "id": "fortis-bannerghatta", "name": "Fortis Hospital, Bannerghatta Road", "aliases": ["fortis", "fortis hospital", "fortis bannerghatta"], "lat": 12.894751, "lng": 77.598676 },
+  { "id": "fortis-cunningham", "name": "Fortis Hospital, Cunningham Road", "aliases": ["fortis cunningham", "fortis cunningham road"], "lat": 12.988549, "lng": 77.594574 },
+  { "id": "aster-cmi", "name": "Aster CMI Hospital, Hebbal", "aliases": ["aster", "aster cmi", "cmi hospital"], "lat": 13.054559, "lng": 77.591647 },
+  { "id": "sagar-jayanagar", "name": "Sagar Hospitals, Jayanagar", "aliases": ["sagar", "sagar hospital", "sagar hospitals"], "lat": 12.927948, "lng": 77.59985 },
+  { "id": "sakra", "name": "Sakra World Hospital, Bellandur", "aliases": ["sakra", "sakra world"], "lat": 12.932315, "lng": 77.685248 },
+  { "id": "bowring", "name": "Bowring and Lady Curzon Hospital, Shivajinagar", "aliases": ["bowring", "lady curzon", "bowring hospital"], "lat": 12.983343, "lng": 77.604687 },
+  { "id": "kc-general", "name": "K.C. General Hospital, Malleshwaram", "aliases": ["kc general", "k c general", "kc hospital"], "lat": 12.993382, "lng": 77.569417 },
+  { "id": "sparsh", "name": "Sparsh Hospital, Infantry Road", "aliases": ["sparsh", "sparsh hospital"], "lat": 12.98333, "lng": 77.594536 }
 ]

@@ -1,23 +1,20 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import Map from "./Map";
 import BackLink from "./BackLink";
 import Lens from "./Lens";
-import { fmtKm, fmtMin } from "@/lib/useTrip";
-import { TEST_HOSPITALS, TEST_MODE } from "@/lib/testMode";
+import { TEST_MODE } from "@/lib/testMode";
 
 type Account = {
   id: string; hospitalName: string; address: string; registration: string;
   emergencyDesk: string; staffName: string; staffRole: string;
 };
+// A hospital is told the time until arrival and nothing that would let it follow the ambulance.
 type Incoming = {
-  id: string; status: "enroute" | "arrived"; etaS: number; remainingM: number;
-  position: [number, number]; start: { lat: number; lng: number }; hospital: { name: string; lat: number; lng: number };
-  route: { id: string; coords: [number, number][] };
+  id: string; status: "enroute" | "arrived"; etaMinutes: number;
   note: { raw: string; severity?: string; summary?: string; aiOk: boolean } | null;
-  reroutes: number;
   hospitalAck: { by: string; role: string; at: number } | null;
 };
+type TestAccount = { id: string; pin: string; name: string; current: boolean };
 type Call = (path: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; data: any }>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 const TOKEN_KEY = "qc_hospital_token";
@@ -84,11 +81,34 @@ export default function HospitalApp() {
 }
 
 function LoginScreen({ onLogin }: { onLogin: (t: string, a: Account) => void }) {
-  // In test mode the form opens already filled in with a sample hospital desk.
-  const [id, setId] = useState(TEST_MODE ? TEST_HOSPITALS[0].id : "");
-  const [pin, setPin] = useState(TEST_MODE ? TEST_HOSPITALS[0].pin : "");
+  const [id, setId] = useState("");
+  const [pin, setPin] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [accounts, setAccounts] = useState<TestAccount[]>([]);
+  const touched = useRef(false); // true once the tester picks a hospital by hand
+
+  // Test mode only: list every hospital login, and keep the one the ambulance is heading to at the top.
+  // The form fills itself in with that hospital unless the tester has already chosen another.
+  useEffect(() => {
+    if (!TEST_MODE) return;
+    let alive = true;
+    const load = async () => {
+      try {
+        const r = await fetch("/api/hospital/test-accounts", { cache: "no-store" });
+        if (!r.ok || !alive) return;
+        const list: TestAccount[] = (await r.json()).accounts;
+        setAccounts(list);
+        if (!touched.current) {
+          const pick = list.find((a) => a.current) ?? list[0];
+          if (pick) { setId(pick.id); setPin(pick.pin); }
+        }
+      } catch { /* leave the form as it is */ }
+    };
+    load();
+    const t = setInterval(load, 4000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
 
   async function submit() {
     setErr(null);
@@ -102,11 +122,13 @@ function LoginScreen({ onLogin }: { onLogin: (t: string, a: Account) => void }) 
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
 
+  const ordered = [...accounts].sort((a, b) => Number(b.current) - Number(a.current));
+
   return (
     <main className="page narrow">
       <BackLink />
       <h1>Hospital emergency desk login</h1>
-      <p className="sub">Log in with your hospital ID and PIN. You will see ambulances heading to your hospital and can confirm that your team is ready.</p>
+      <p className="sub">Log in with your hospital ID and PIN. You are told when an ambulance is heading to your hospital and how long it will take, and you can confirm that your team is ready.</p>
       <div className="panel">
         <label className="field">
           Hospital ID
@@ -119,18 +141,18 @@ function LoginScreen({ onLogin }: { onLogin: (t: string, a: Account) => void }) 
         {err && <p className="errbox">{err}</p>}
         <button className="btn on big" onClick={submit} disabled={busy} style={{ width: "100%" }}>{busy ? "Checking…" : "Log in"}</button>
       </div>
-      {TEST_MODE && (
+      {TEST_MODE && ordered.length > 0 && (
         <div className="testbox">
-          <b>Test mode.</b> The form is filled in for you. Pick another sample hospital to fill it with theirs.
+          <b>Test mode.</b> Every hospital has a login. The hospital the ambulance is heading to is listed first and filled in for you. Pick another to fill the form with theirs.
           <select
-            aria-label="Sample hospital"
+            aria-label="Hospital to log in as"
             value={id}
             onChange={(e) => {
-              const h = TEST_HOSPITALS.find((x) => x.id === e.target.value);
-              if (h) { setId(h.id); setPin(h.pin); }
+              const h = ordered.find((x) => x.id === e.target.value);
+              if (h) { touched.current = true; setId(h.id); setPin(h.pin); }
             }}
           >
-            {TEST_HOSPITALS.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+            {ordered.map((h) => <option key={h.id} value={h.id}>{h.current ? "Ambulance heading here: " : ""}{h.name}</option>)}
           </select>
         </div>
       )}
@@ -176,7 +198,6 @@ function Dashboard({ account, call, onSignOut }: { account: Account; call: Call;
   }
 
   const arrived = trip?.status === "arrived";
-  const arrival = trip ? new Date(Date.now() + trip.etaS * 1000) : null;
 
   return (
     <main className="page narrow">
@@ -196,7 +217,7 @@ function Dashboard({ account, call, onSignOut }: { account: Account; call: Call;
       {!trip && (
         <div className="panel">
           <b>No ambulance is heading to your hospital right now.</b>
-          <p className="muted">Keep this page open. You will get an alert and a sound as soon as a driver starts a trip here.</p>
+          <p className="muted">Keep this page open. You get an alert and a sound as soon as a driver starts a trip here, with the time until it arrives.</p>
         </div>
       )}
 
@@ -205,17 +226,18 @@ function Dashboard({ account, call, onSignOut }: { account: Account; call: Call;
           <div className={`banner ${arrived ? "green" : "red"}`} role="alert">
             <Lens color="#fff" pulse={!arrived} />
             <span>
-              <b>{arrived ? "The ambulance has arrived." : "Ambulance on its way to you."}</b>
-              {!arrived && arrival && <> About {arrival.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}. Prepare your emergency team.</>}
+              <b>{arrived ? "The ambulance has arrived." : "An ambulance is on its way to you."}</b>
+              {!arrived && <> Prepare your emergency team.</>}
             </span>
           </div>
 
-          <div className="stats">
-            <div className="stat"><b>{arrived ? "Here" : fmtMin(trip.etaS)}</b><span>{arrived ? "at your door" : "until arrival"}</span></div>
-            <div className="stat"><b>{fmtKm(trip.remainingM)}</b><span>away</span></div>
-            <div className="stat"><b>{trip.reroutes}</b><span>route change{trip.reroutes === 1 ? "" : "s"}</span></div>
+          <div className="eta">
+            <span>
+              <b>{arrived ? "Here" : `Within ${trip.etaMinutes} min`}</b>
+              <span>{arrived ? "at your door" : "until the ambulance arrives"}</span>
+            </span>
           </div>
-          <p className="muted">Arrival time uses normal road speeds, not live traffic.</p>
+          <p className="muted">An estimate at normal road speeds, not live traffic. You are told the time only, not where the ambulance is.</p>
 
           <div className="panel">
             <h2 style={{ marginTop: 0 }}>Note from the crew</h2>
@@ -248,16 +270,6 @@ function Dashboard({ account, call, onSignOut }: { account: Account; call: Call;
               Emergency team is ready
             </button>
           )}
-
-          <div style={{ marginTop: 14 }}>
-            <Map
-              routes={[{ id: trip.route.id, coords: trip.route.coords, color: "#2563eb", selected: true }]}
-              ambulance={{ lat: trip.position[1], lng: trip.position[0] }}
-              hospital={trip.hospital}
-              start={trip.start}
-              height={300}
-            />
-          </div>
         </>
       )}
 

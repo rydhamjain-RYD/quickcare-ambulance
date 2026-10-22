@@ -1,6 +1,7 @@
 import { replaceRoute, resetTrip, setSpeed, SPEEDS, startTrip, view, type Trip } from "@/lib/trip";
 import { planRoutes, RoutingError, type RouteOption } from "@/lib/routing";
 import { summarizeNote } from "@/lib/summarize";
+import { ensureHospitalAccount } from "@/lib/hospitalStaff";
 
 /** The trip as drivers and officers may see it. The patient note is private to the hospital, so it is left out. */
 function publicView() {
@@ -36,6 +37,7 @@ export async function POST(request: Request) {
     const raw = body.note?.raw?.trim();
     const note = raw ? await summarizeNote(raw.slice(0, 500)) : undefined;
     startTrip({ hospital: body.hospital, start: body.start, route: body.route, note });
+    ensureHospitalAccount(body.hospital); // test mode: whichever hospital is chosen can be logged in to
     return Response.json({ trip: publicView() });
   }
   if (body.action === "speed") {

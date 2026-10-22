@@ -22,11 +22,8 @@ export const TEST_OFFICERS = [
   { badge: "BLR-TP-1010", pin: "3361", name: "Farah Khan" },
 ];
 
-export const TEST_HOSPITALS = [
-  { id: "HOSP-MAN-01", pin: "5190", name: "Manipal Hospital, Old Airport Road" },
-  { id: "HOSP-RNG-01", pin: "8264", name: "Rangadore Memorial Hospital" },
-  { id: "HOSP-MJH-01", pin: "3377", name: "Bhagwan Mahaveer Jain Hospital" },
-];
+// Hospital logins are not listed here: /api/hospital/test-accounts supplies them (and, in test mode,
+// creates one on the spot for any hospital a driver picks that has no account yet).
 
 // The trip the route planner opens with in test mode: Jayanagar 4th Block to Manipal Hospital (about 12 km, 18 signals).
 export const TEST_TRIP = {

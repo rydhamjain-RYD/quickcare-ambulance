@@ -1,7 +1,13 @@
 import { hospitalCovers, hospitalFromRequest, touchHospital } from "@/lib/hospitalStaff";
 import { view } from "@/lib/trip";
 
-/** The ambulance heading to the logged-in hospital, if any. Only that hospital can see the patient note. */
+/**
+ * The ambulance heading to the logged-in hospital, if any.
+ *
+ * A hospital is told how long until the ambulance arrives, in whole minutes, and nothing that would
+ * let it follow the ambulance: no position, no route, no distance, no start point. Only the hospital
+ * the ambulance is heading to can see the patient note.
+ */
 export async function GET(request: Request) {
   const account = hospitalFromRequest(request);
   if (!account) return Response.json({ error: "Please log in again." }, { status: 401 });
@@ -15,14 +21,8 @@ export async function GET(request: Request) {
     trip: {
       id: t.id,
       status: t.status,
-      etaS: t.etaS,
-      remainingM: t.remainingM,
-      position: t.position,
-      start: t.start,
-      hospital: t.hospital,
-      route: { id: t.route.id, coords: t.route.coords },
+      etaMinutes: Math.max(1, Math.ceil(t.etaS / 60)), // "within N minutes"
       note: t.note ?? null,
-      reroutes: t.reroutes,
       hospitalAck: t.hospitalAck ?? null,
     },
   });
