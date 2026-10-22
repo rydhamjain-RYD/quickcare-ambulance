@@ -31,6 +31,10 @@ h2 { font-size: 1.1rem; margin: 18px 0 8px; }
 .btn.danger { color: var(--red); border-color: var(--red); }
 .btn.good { background: var(--green); color: #fff; border-color: var(--green); }
 .btn.danger.big { background: var(--red); color: #fff; }
+.btn.warnbtn { background: #ea580c; color: #fff; border-color: #ea580c; }
+.btn.picked { outline: 4px solid #0f172a; outline-offset: 2px; }
+.current { border: 2px solid; border-radius: 8px; padding: 8px 12px; background: #fff; }
+.advice { border: 2px solid; border-radius: 12px; padding: 10px 14px; margin: 10px 0; background: #fff; font-size: 1.05rem; }
 .btn.big { padding: 14px 22px; font-size: 1.1rem; font-weight: 600; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 

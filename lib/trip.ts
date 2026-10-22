@@ -5,7 +5,8 @@ export const ALERT_DISTANCE_M = 800; // officer is alerted this far before the s
 export const ESCALATE_AFTER_MS = 25_000; // no answer in this long goes to the control room
 export const SPEEDS = [1, 4, 8, 16] as const;
 
-export type AlertStatus = "waiting" | "alerted" | "cleared" | "cannot" | "unanswered";
+export type AlertStatus = "waiting" | "alerted" | "cleared" | "heavy" | "cannot" | "unanswered";
+export type OfficerAnswer = "clear" | "heavy" | "cannot";
 
 export type SignalAlert = {
   signalId: string;
@@ -119,14 +120,17 @@ export function tick(): Trip | null {
   return t;
 }
 
-export function respond(signalId: string, answer: "clear" | "cannot"): { ok: boolean; error?: string } {
+const ANSWER_STATUS: Record<OfficerAnswer, AlertStatus> = { clear: "cleared", heavy: "heavy", cannot: "cannot" };
+
+/** Officer reply. Can be updated until the ambulance passes, because traffic changes. */
+export function respond(signalId: string, answer: OfficerAnswer): { ok: boolean; error?: string } {
   const t = tick();
   if (!t) return { ok: false, error: "No ambulance trip is active." };
   const a = t.alerts.find((x) => x.signalId === signalId);
   if (!a) return { ok: false, error: "This junction is not on the ambulance's route." };
   if (a.status === "waiting") return { ok: false, error: "The ambulance is not close enough yet." };
-  if (a.status === "cleared" || a.status === "cannot") return { ok: false, error: "Already answered." };
-  a.status = answer === "clear" ? "cleared" : "cannot";
+  if (a.alongM <= t.progressM) return { ok: false, error: "The ambulance has already passed this junction." };
+  a.status = ANSWER_STATUS[answer];
   a.respondedAt = Date.now();
   return { ok: true };
 }

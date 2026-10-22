@@ -7,8 +7,8 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: "Send JSON." }, { status: 400 });
   }
-  if (!body.signalId || (body.answer !== "clear" && body.answer !== "cannot")) {
-    return Response.json({ error: "signalId and answer ('clear' or 'cannot') are required." }, { status: 400 });
+  if (!body.signalId || (body.answer !== "clear" && body.answer !== "heavy" && body.answer !== "cannot")) {
+    return Response.json({ error: "signalId and answer ('clear', 'heavy' or 'cannot') are required." }, { status: 400 });
   }
   const r = respond(body.signalId, body.answer);
   if (!r.ok) return Response.json({ error: r.error }, { status: 409 });

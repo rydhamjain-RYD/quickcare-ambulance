@@ -5,6 +5,7 @@ import BackLink from "@/components/BackLink";
 import { fmtKm, fmtMin, useTrip } from "@/lib/useTrip";
 import type { RouteOption } from "@/lib/routing";
 import { STATUS } from "@/lib/status";
+import type { AlertStatus } from "@/lib/trip";
 
 type Place = { id: string; name: string; lat: number; lng: number; source: string };
 type Pickup = { name: string; lat: number; lng: number };
@@ -13,6 +14,20 @@ type Pickup = { name: string; lat: number; lng: number };
 const inBengaluru = (lat: number, lng: number) => lat >= 12.83 && lat <= 13.1 && lng >= 77.45 && lng <= 77.75;
 
 const ROUTE_COLORS = ["#2563eb", "#ea580c"];
+
+// What the crew should do, by what the officer at the next signal has said.
+const ADVICE: Record<AlertStatus, string> = {
+  waiting: "the officer will be alerted at 800 m.",
+  alerted: "officer alerted, waiting for a reply. Keep your siren on.",
+  cleared: "officer says the route is CLEAR. Proceed.",
+  heavy: "officer reports HEAVY TRAFFIC. Expect a delay and slow down.",
+  cannot: "officer CAN'T clear this signal. Take extra care.",
+  unanswered: "no reply from the officer. Drive with caution.",
+};
+
+// Demo trip: an example pickup in Jayanagar to Manipal Hospital on Old Airport Road (about 11 km, 16 signals).
+const DEMO_PICKUP: Pickup = { name: "Jayanagar 4th Block (demo pickup)", lat: 12.9265737, lng: 77.5835041 };
+const DEMO_HOSPITAL: Place = { id: "manipal-old-airport", name: "Manipal Hospital, Old Airport Road (demo drop)", lat: 12.959846, lng: 77.649214, source: "saved" };
 
 export default function DriverPage() {
   const { trip, loaded, error, setTrip } = useTrip();
@@ -185,6 +200,7 @@ export default function DriverPage() {
   // ---------- Trip in progress ----------
   if (trip) {
     const done = trip.status === "arrived";
+    const nextAlert = trip.alerts.find((a) => a.alongM > trip.progressM);
     return (
       <main className="page">
         <BackLink />
@@ -195,6 +211,12 @@ export default function DriverPage() {
           <div><b>{fmtKm(trip.remainingM)}</b><span>remaining</span></div>
           <div><b>{trip.nextSignal ? `#${trip.nextSignal.index} in ${fmtKm(trip.nextSignal.distanceM)}` : "None"}</b><span>next signal</span></div>
         </div>
+        {nextAlert && (
+          <div className="advice" style={{ borderColor: STATUS[nextAlert.status].color }}>
+            <b>Next signal #{nextAlert.index}</b> ({fmtKm(nextAlert.alongM - trip.progressM)} ahead): {ADVICE[nextAlert.status]}{" "}
+            <a href={`/officer/${nextAlert.signalId}`} target="_blank" rel="noreferrer">Open this officer&apos;s page</a>
+          </div>
+        )}
         <Map
           routes={[{ id: trip.route.id, coords: trip.route.coords, color: "#2563eb", selected: true }]}
           signals={trip.alerts.map((a) => ({ id: a.signalId, lat: a.lat, lng: a.lng, label: String(a.index), color: STATUS[a.status].color }))}
@@ -217,6 +239,7 @@ export default function DriverPage() {
               <span className="dot" style={{ background: STATUS[a.status].color }}>{a.index}</span>
               <span>{fmtKm(a.alongM)} from start, heading {a.direction}</span>
               <b style={{ color: STATUS[a.status].color }}>{STATUS[a.status].label}</b>
+              <a href={`/officer/${a.signalId}`} target="_blank" rel="noreferrer" className="muted">officer page</a>
             </li>
           ))}
         </ol>
@@ -232,6 +255,22 @@ export default function DriverPage() {
       <BackLink />
       <h1>Driver: plan the route</h1>
       {error && <p className="warn">{error}</p>}
+      <div className="row">
+        <button
+          className="btn"
+          disabled={busy}
+          onClick={() => {
+            setPickup(DEMO_PICKUP);
+            setPPlaces([]);
+            setPMsg(null);
+            setPlaces([]);
+            setSearchMsg(null);
+            findRoutes(DEMO_HOSPITAL, DEMO_PICKUP);
+          }}
+        >
+          Load demo trip (Jayanagar to Manipal, Old Airport Road)
+        </button>
+      </div>
       {pickup ? (
         <div className="pickup">
           <span>Pickup: <b>{pickup.name}</b></span>
