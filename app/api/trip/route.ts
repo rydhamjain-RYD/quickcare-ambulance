@@ -1,5 +1,6 @@
 import { resetTrip, setSpeed, SPEEDS, startTrip, view, type Trip } from "@/lib/trip";
 import type { RouteOption } from "@/lib/routing";
+import { summarizeNote } from "@/lib/summarize";
 
 export async function GET() {
   return Response.json({ trip: view() });
@@ -24,7 +25,9 @@ export async function POST(request: Request) {
     if (!body.hospital?.name || !body.start || !body.route?.coords?.length) {
       return Response.json({ error: "A hospital, a start point and a chosen route are needed to start." }, { status: 400 });
     }
-    startTrip({ hospital: body.hospital, start: body.start, route: body.route, note: body.note });
+    const raw = body.note?.raw?.trim();
+    const note = raw ? await summarizeNote(raw.slice(0, 500)) : undefined;
+    startTrip({ hospital: body.hospital, start: body.start, route: body.route, note });
     return Response.json({ trip: view() });
   }
   if (body.action === "speed") {
