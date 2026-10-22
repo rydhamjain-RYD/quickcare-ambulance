@@ -8,27 +8,32 @@ const SEVERITIES = ["critical", "serious", "stable", "unclear"] as const;
  * so the hospital page shows the raw text and says there is no AI summary.
  */
 export async function summarizeNote(raw: string): Promise<NonNullable<Trip["note"]>> {
-  const key = process.env.ANTHROPIC_API_KEY;
+  const key = process.env.OPENROUTER_API_KEY;
   if (!key || key.startsWith("PASTE")) return { raw, aiOk: false };
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      signal: AbortSignal.timeout(10000),
+      headers: { Authorization: `Bearer ${key}`, "content-type": "application/json" },
+      signal: AbortSignal.timeout(15000),
       body: JSON.stringify({
-        model: "claude-haiku-5-5",
+        model: "google/gemini-3.5-flash-lite",
         max_tokens: 300,
-        system:
-          "You help a hospital prepare for an incoming ambulance. The note is written by an ambulance crew in any mix of English, Hindi and Kannada, possibly misspelled. " +
-          'Reply with ONLY JSON: {"severity":"critical|serious|stable|unclear","summary":"two short lines in English","confidence":0-1}. ' +
-          "Use only facts in the note. Never invent details. If the note is too vague, use severity unclear.",
-        messages: [{ role: "user", content: raw }],
+        messages: [
+          {
+            role: "system",
+            content:
+              "You help a hospital prepare for an incoming ambulance. The note is written by an ambulance crew in any mix of English, Hindi and Kannada, possibly misspelled. " +
+              'Reply with ONLY JSON: {"severity":"critical|serious|stable|unclear","summary":"two short lines in English","confidence":0-1}. ' +
+              "Use only facts in the note. Never invent details. If the note is too vague, use severity unclear.",
+          },
+          { role: "user", content: raw },
+        ],
       }),
     });
     if (!res.ok) throw new Error(`status ${res.status}`);
     const data = await res.json();
-    const text: string = data.content?.[0]?.text ?? "";
+    const text: string = data.choices?.[0]?.message?.content ?? "";
     const parsed = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
     const severity = SEVERITIES.includes(parsed.severity) ? parsed.severity : "unclear";
     if (typeof parsed.summary !== "string" || !parsed.summary.trim()) throw new Error("no summary");
