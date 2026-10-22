@@ -18,6 +18,8 @@ export type RouteOption = {
 export type RoutesResult = {
   options: RouteOption[];
   source: "osrm";
+  /** True when every route found passes through a signal that was asked to be avoided. */
+  blocked?: boolean;
 };
 
 type RawSignal = { id: number; lat: number; lng: number; name?: string | null };
@@ -62,14 +64,16 @@ function touchesNarrowLane(coords: LngLat[]): boolean {
 
 export class RoutingError extends Error {}
 
-export async function planRoutes(from: { lat: number; lng: number }, to: { lat: number; lng: number }): Promise<RoutesResult> {
-  if (haversine([from.lng, from.lat], [to.lng, to.lat]) < 100) {
-    throw new RoutingError("Start and hospital are less than 100 m apart.");
-  }
-  const url =
-    `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}` +
-    `?alternatives=3&overview=full&geometries=geojson&steps=false`;
+const AVOID_RADIUS_M = 60; // a route passing this close to a blocked signal is dropped
 
+type RawRoute = { distanceM: number; durationS: number; coords: LngLat[] };
+
+/** Ask the public OSRM server for driving routes through the given points, in order. */
+async function osrmRoutes(points: { lat: number; lng: number }[], alternatives: number): Promise<RawRoute[]> {
+  const path = points.map((p) => `${p.lng},${p.lat}`).join(";");
+  // Alternatives only work with two points.
+  const alt = points.length === 2 && alternatives > 0 ? `alternatives=${alternatives}` : "alternatives=false";
+  const url = `https://router.project-osrm.org/route/v1/driving/${path}?${alt}&overview=full&geometries=geojson&steps=false`;
   let data: { code: string; routes?: { distance: number; duration: number; geometry: { coordinates: LngLat[] } }[] };
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(15000), cache: "no-store" });
@@ -78,17 +82,52 @@ export async function planRoutes(from: { lat: number; lng: number }, to: { lat: 
   } catch (e) {
     throw new RoutingError(`Could not reach the routing service (${(e as Error).message}). Try again.`);
   }
-  if (data.code !== "Ok" || !data.routes?.length) {
-    throw new RoutingError("No driving route found between these two places.");
-  }
+  if (data.code !== "Ok" || !data.routes?.length) return [];
+  return data.routes.map((r) => ({ distanceM: Math.round(r.distance), durationS: Math.round(r.duration), coords: r.geometry.coordinates }));
+}
 
-  let candidates = data.routes.map((r, i) => ({
-    id: `r${i}`,
-    distanceM: Math.round(r.distance),
-    durationS: Math.round(r.duration),
-    coords: r.geometry.coordinates,
-    narrow: touchesNarrowLane(r.geometry.coordinates),
-  }));
+export async function planRoutes(
+  from: { lat: number; lng: number },
+  to: { lat: number; lng: number },
+  opts: { avoid?: { lat: number; lng: number }[] } = {},
+): Promise<RoutesResult> {
+  if (haversine([from.lng, from.lat], [to.lng, to.lat]) < 100) {
+    throw new RoutingError("Start and hospital are less than 100 m apart.");
+  }
+  let candidates = (await osrmRoutes([from, to], 3)).map((r, i) => ({ id: `r${i}`, ...r, narrow: touchesNarrowLane(r.coords) }));
+  if (candidates.length === 0) throw new RoutingError("No driving route found between these two places.");
+
+  // Drop routes that pass through a signal the officer reported as blocked or heavy.
+  const avoid = opts.avoid ?? [];
+  if (avoid.length > 0) {
+    const clearOfAvoided = (coords: LngLat[]) => {
+      const cum = cumulative(coords);
+      return !avoid.some((p) => locateOnRoute([p.lng, p.lat], coords, cum).dist < AVOID_RADIUS_M);
+    };
+    candidates = candidates.filter((c) => clearOfAvoided(c.coords));
+
+    if (candidates.length === 0) {
+      // Every alternative shares the blocked signal, so try detours that pass through a point
+      // 1 km (then 1.6 km) away from it in eight directions. Diagonals matter: a point straight
+      // north or south often still funnels the route back through the same junction.
+      const b = avoid[0];
+      const DIRS = [[0, 1], [0, -1], [1, 0], [-1, 0], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]];
+      for (const distM of [1000, 1600]) {
+        const vias = DIRS.map(([dx, dy]) => ({
+          lat: b.lat + (dy * distM) / 111320,
+          lng: b.lng + (dx * distM) / (111320 * Math.cos((b.lat * Math.PI) / 180)),
+        }));
+        const detours = await Promise.allSettled(vias.map((v) => osrmRoutes([from, v, to], 0)));
+        candidates = detours
+          .flatMap((d) => (d.status === "fulfilled" ? d.value : []))
+          .filter((r, i, all) => all.findIndex((x) => x.durationS === r.durationS && x.distanceM === r.distanceM) === i)
+          .map((r, i) => ({ id: `d${distM}-${i}`, ...r, narrow: touchesNarrowLane(r.coords) }))
+          .filter((c) => clearOfAvoided(c.coords));
+        if (candidates.length > 0) break;
+      }
+    }
+    if (candidates.length === 0) return { options: [], source: "osrm", blocked: true };
+  }
 
   // Prefer routes that stay out of known narrow lanes; keep them all only if none is clean.
   const clean = candidates.filter((c) => !c.narrow);

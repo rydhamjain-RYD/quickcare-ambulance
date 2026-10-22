@@ -40,6 +40,8 @@ export default function MapView({
 }) {
   const pts: [number, number][] = [];
   routes.forEach((r) => r.coords.forEach((c) => pts.push([c[1], c[0]])));
+  // When there is no route to frame (e.g. the officer picking a junction), frame the signals instead.
+  if (routes.length === 0) signals.forEach((s) => pts.push([s.lat, s.lng]));
   if (hospital) pts.push([hospital.lat, hospital.lng]);
   if (start) pts.push([start.lat, start.lng]);
   const lats = pts.map((p) => p[0]);

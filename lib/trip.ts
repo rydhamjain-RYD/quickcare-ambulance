@@ -1,12 +1,16 @@
 import { cumulative, headingAt, pointAtDistance, type LngLat } from "./geo";
+import { officerNear } from "./officers";
+import { HEAVY_REASONS, type HeavyReason } from "./status";
 import type { RouteOption } from "./routing";
 
 export const ALERT_DISTANCE_M = 800; // officer is alerted this far before the signal
-export const ESCALATE_AFTER_MS = 25_000; // no answer in this long goes to the control room
+export const NO_REPLY_AFTER_MS = 25_000; // no answer in this long is shown to the crew as "no reply"
 export const SPEEDS = [1, 4, 8, 16] as const;
 
 export type AlertStatus = "waiting" | "alerted" | "cleared" | "heavy" | "cannot" | "unanswered";
 export type OfficerAnswer = "clear" | "heavy" | "cannot";
+export { HEAVY_REASONS };
+export type { HeavyReason };
 
 export type SignalAlert = {
   signalId: string;
@@ -15,6 +19,8 @@ export type SignalAlert = {
   lng: number;
   alongM: number;
   status: AlertStatus;
+  reason?: HeavyReason; // why traffic is heavy, when the officer said so
+  answeredBy?: { name: string; badge: string };
   alertedAt?: number;
   respondedAt?: number;
   direction?: string;
@@ -31,10 +37,14 @@ export type Trip = {
   speed: number; // simulation speed multiplier
   lastTickAt: number;
   startedAt: number;
+  reroutes: number;
   alerts: SignalAlert[];
 };
 
-export type TripView = Trip & {
+export type ViewAlert = SignalAlert & { onDuty?: { name: string; badge: string } };
+
+export type TripView = Omit<Trip, "alerts"> & {
+  alerts: ViewAlert[];
   position: LngLat;
   baseSpeedMps: number;
   remainingM: number;
@@ -52,6 +62,27 @@ export function getTripRaw(): Trip | null {
 export function resetTrip() {
   g.__qcTrip = null;
   g.__qcCum = undefined;
+}
+
+function buildAlerts(route: RouteOption, cum: number[], previous?: SignalAlert[]): SignalAlert[] {
+  const old = new Map((previous ?? []).map((a) => [a.signalId, a]));
+  return route.signals.map((s, i) => {
+    const prev = old.get(s.id);
+    const keep = prev && prev.status !== "waiting";
+    return {
+      signalId: s.id,
+      index: i + 1,
+      lat: s.lat,
+      lng: s.lng,
+      alongM: s.alongM,
+      status: keep ? prev.status : ("waiting" as AlertStatus),
+      reason: keep ? prev.reason : undefined,
+      answeredBy: keep ? prev.answeredBy : undefined,
+      alertedAt: keep ? prev.alertedAt : undefined,
+      respondedAt: keep ? prev.respondedAt : undefined,
+      direction: headingAt(route.coords, cum, s.alongM),
+    };
+  });
 }
 
 export function startTrip(args: {
@@ -73,19 +104,26 @@ export function startTrip(args: {
     speed: 8,
     lastTickAt: now,
     startedAt: now,
-    alerts: args.route.signals.map((s, i) => ({
-      signalId: s.id,
-      index: i + 1,
-      lat: s.lat,
-      lng: s.lng,
-      alongM: s.alongM,
-      status: "waiting" as AlertStatus,
-      direction: headingAt(args.route.coords, cum, s.alongM),
-    })),
+    reroutes: 0,
+    alerts: buildAlerts(args.route, cum),
   };
   g.__qcTrip = trip;
   g.__qcCum = cum;
   return trip;
+}
+
+/** Switch to a new route planned from the ambulance's current position. */
+export function replaceRoute(route: RouteOption): boolean {
+  const t = tick();
+  if (!t || t.status !== "enroute") return false;
+  const cum = cumulative(route.coords);
+  t.alerts = buildAlerts(route, cum, t.alerts);
+  t.route = route;
+  t.progressM = 0;
+  t.lastTickAt = Date.now();
+  t.reroutes += 1;
+  g.__qcCum = cum;
+  return true;
 }
 
 export function setSpeed(speed: number) {
@@ -95,7 +133,7 @@ export function setSpeed(speed: number) {
   t.speed = speed;
 }
 
-/** Advance the simulated ambulance and fire/escalate alerts. Called on every read. */
+/** Advance the simulated ambulance and fire alerts. Called on every read. */
 export function tick(): Trip | null {
   const t = g.__qcTrip;
   if (!t) return null;
@@ -113,7 +151,7 @@ export function tick(): Trip | null {
       a.status = "alerted";
       a.alertedAt = now;
     }
-    if (a.status === "alerted" && a.alertedAt && now - a.alertedAt > ESCALATE_AFTER_MS) {
+    if (a.status === "alerted" && a.alertedAt && now - a.alertedAt > NO_REPLY_AFTER_MS) {
       a.status = "unanswered";
     }
   }
@@ -123,7 +161,12 @@ export function tick(): Trip | null {
 const ANSWER_STATUS: Record<OfficerAnswer, AlertStatus> = { clear: "cleared", heavy: "heavy", cannot: "cannot" };
 
 /** Officer reply. Can be updated until the ambulance passes, because traffic changes. */
-export function respond(signalId: string, answer: OfficerAnswer): { ok: boolean; error?: string } {
+export function respond(
+  signalId: string,
+  answer: OfficerAnswer,
+  by: { name: string; badge: string },
+  reason?: HeavyReason,
+): { ok: boolean; error?: string } {
   const t = tick();
   if (!t) return { ok: false, error: "No ambulance trip is active." };
   const a = t.alerts.find((x) => x.signalId === signalId);
@@ -131,6 +174,8 @@ export function respond(signalId: string, answer: OfficerAnswer): { ok: boolean;
   if (a.status === "waiting") return { ok: false, error: "The ambulance is not close enough yet." };
   if (a.alongM <= t.progressM) return { ok: false, error: "The ambulance has already passed this junction." };
   a.status = ANSWER_STATUS[answer];
+  a.reason = answer === "heavy" ? (reason ?? "congestion") : undefined;
+  a.answeredBy = by;
   a.respondedAt = Date.now();
   return { ok: true };
 }
@@ -144,6 +189,7 @@ export function view(): TripView | null {
   const next = t.alerts.find((a) => a.alongM > t.progressM);
   return {
     ...t,
+    alerts: t.alerts.map((a) => ({ ...a, onDuty: officerNear(a.lat, a.lng) })),
     position: pointAtDistance(t.route.coords, cum, t.progressM),
     baseSpeedMps: base,
     remainingM,

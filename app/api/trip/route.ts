@@ -1,5 +1,5 @@
-import { resetTrip, setSpeed, SPEEDS, startTrip, view, type Trip } from "@/lib/trip";
-import type { RouteOption } from "@/lib/routing";
+import { replaceRoute, resetTrip, setSpeed, SPEEDS, startTrip, view, type Trip } from "@/lib/trip";
+import { planRoutes, RoutingError, type RouteOption } from "@/lib/routing";
 import { summarizeNote } from "@/lib/summarize";
 
 export async function GET() {
@@ -35,6 +35,25 @@ export async function POST(request: Request) {
       return Response.json({ error: `Speed must be one of ${SPEEDS.join(", ")}.` }, { status: 400 });
     }
     setSpeed(body.speed as number);
+    return Response.json({ trip: view() });
+  }
+  if (body.action === "reroute-options") {
+    // Plan new routes from where the ambulance is now, steering clear of signals the officer reported.
+    const trip = view();
+    if (!trip || trip.status !== "enroute") return Response.json({ error: "No trip is in progress." }, { status: 409 });
+    const avoid = trip.alerts
+      .filter((a) => (a.status === "heavy" || a.status === "cannot") && a.alongM > trip.progressM)
+      .map((a) => ({ lat: a.lat, lng: a.lng }));
+    try {
+      const result = await planRoutes({ lat: trip.position[1], lng: trip.position[0] }, trip.hospital, { avoid });
+      return Response.json({ options: result.options, blocked: !!result.blocked, avoided: avoid.length });
+    } catch (e) {
+      return Response.json({ error: (e as Error).message }, { status: e instanceof RoutingError ? 502 : 500 });
+    }
+  }
+  if (body.action === "switch-route") {
+    if (!body.route?.coords?.length) return Response.json({ error: "No route was chosen." }, { status: 400 });
+    if (!replaceRoute(body.route)) return Response.json({ error: "No trip is in progress." }, { status: 409 });
     return Response.json({ trip: view() });
   }
   if (body.action === "reset") {
