@@ -188,7 +188,7 @@ function Dashboard({ account, call, onSignOut }: { account: Account; call: Call;
 
       {trip && (
         <>
-          <div className="banner" style={{ background: arrived ? "var(--green)" : "var(--red)" }} role="alert">
+          <div className={`banner ${arrived ? "green" : "red"}`} role="alert">
             <Lens color="#fff" pulse={!arrived} />
             <span>
               <b>{arrived ? "The ambulance has arrived." : "Ambulance on its way to you."}</b>
@@ -197,7 +197,7 @@ function Dashboard({ account, call, onSignOut }: { account: Account; call: Call;
           </div>
 
           <div className="stats">
-            <div className="stat hero-stat"><b>{arrived ? "Here" : fmtMin(trip.etaS)}</b><span>{arrived ? "at your door" : "until arrival"}</span></div>
+            <div className="stat"><b>{arrived ? "Here" : fmtMin(trip.etaS)}</b><span>{arrived ? "at your door" : "until arrival"}</span></div>
             <div className="stat"><b>{fmtKm(trip.remainingM)}</b><span>away</span></div>
             <div className="stat"><b>{trip.reroutes}</b><span>route change{trip.reroutes === 1 ? "" : "s"}</span></div>
           </div>
@@ -237,7 +237,7 @@ function Dashboard({ account, call, onSignOut }: { account: Account; call: Call;
 
           <div style={{ marginTop: 14 }}>
             <Map
-              routes={[{ id: trip.route.id, coords: trip.route.coords, color: "#1b3a8c", selected: true }]}
+              routes={[{ id: trip.route.id, coords: trip.route.coords, color: "#2563eb", selected: true }]}
               ambulance={{ lat: trip.position[1], lng: trip.position[0] }}
               hospital={trip.hospital}
               start={trip.start}

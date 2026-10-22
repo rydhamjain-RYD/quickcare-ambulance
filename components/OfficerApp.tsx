@@ -242,7 +242,7 @@ function PostingScreen({
         <>
           <h2>Signals near {area.name}</h2>
           <Map
-            signals={spots.map((s, i) => ({ id: `${s.lat},${s.lng}`, lat: s.lat, lng: s.lng, label: String(i + 1), color: "#1b3a8c" }))}
+            signals={spots.map((s, i) => ({ id: `${s.lat},${s.lng}`, lat: s.lat, lng: s.lng, label: String(i + 1), color: "#2563eb" }))}
             start={{ lat: area.lat, lng: area.lng }}
             height={260}
           />
@@ -263,7 +263,7 @@ function PostingScreen({
           <b>Demo shortcut.</b> An ambulance trip is running. Pick one of its junctions to receive its alert.
           <div className="reasons">
             {demoJunctions.map((j) => (
-              <button key={j.index} className="chip" style={{ borderColor: "var(--blue-2)", color: "var(--ink)" }} disabled={busy}
+              <button key={j.index} className="chip" style={{ borderColor: "var(--accent)", color: "var(--text)" }} disabled={busy}
                 onClick={() => post(j.lat, j.lng, `Junction ${j.index} on the demo route`)}>
                 Junction {j.index} ({fmtKm(j.alongM)})
               </button>
